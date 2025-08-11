@@ -2,6 +2,7 @@ import React from "react";
 import { BrowserRouter as Router, Routes, Route, Navigate } from "react-router-dom";
 import SharedLayout from "./components/SharedLayout";
 import SessionLayout from "./components/SessionLayout";
+import ProtectedRoute from "./components/ProtectedRoute";
 import AskPandaura from "./pages/AskPandaura";
 import LogicStudio from "./pages/LogicStudio";
 import AutoDocs from "./pages/AutoDocs";
@@ -36,12 +37,12 @@ export default function App() {
         
         {/* Full Project Workflow - Persistent Sessions */}
         <Route path="/app" element={<Navigate to="/pandaura-as" replace />} />
-        <Route path="/pandaura-as" element={<SharedLayout><AskPandaura /></SharedLayout>} />
-        <Route path="/logic-studio" element={<SharedLayout><LogicStudio /></SharedLayout>} />
-        <Route path="/autodocs" element={<SharedLayout><AutoDocs /></SharedLayout>} />
-        <Route path="/tag-database" element={<SharedLayout><TagDatabaseManager /></SharedLayout>} />
-        <Route path="/projects" element={<SharedLayout><Projects /></SharedLayout>} />
-        <Route path="/case-studies" element={<SharedLayout><CaseStudies /></SharedLayout>} />
+        <Route path="/pandaura-as" element={<ProtectedRoute><SharedLayout><AskPandaura /></SharedLayout></ProtectedRoute>} />
+        <Route path="/logic-studio" element={<ProtectedRoute><SharedLayout><LogicStudio /></SharedLayout></ProtectedRoute>} />
+        <Route path="/autodocs" element={<ProtectedRoute><SharedLayout><AutoDocs /></SharedLayout></ProtectedRoute>} />
+        <Route path="/tag-database" element={<ProtectedRoute><SharedLayout><TagDatabaseManager /></SharedLayout></ProtectedRoute>} />
+        <Route path="/projects" element={<ProtectedRoute><SharedLayout><Projects /></SharedLayout></ProtectedRoute>} />
+        <Route path="/case-studies" element={<ProtectedRoute><SharedLayout><CaseStudies /></SharedLayout></ProtectedRoute>} />
         
         {/* Quick Tools - One-time Sessions */}
         <Route path="/tool/logic" element={<SessionLayout><LogicStudio sessionMode={true} /></SessionLayout>} />
@@ -51,7 +52,7 @@ export default function App() {
         <Route path="/tool/assistant" element={<SessionLayout><AskPandaura sessionMode={true} /></SessionLayout>} />
         
         {/* Standalone Pages */}
-        <Route path="/profile" element={<Profile />} />
+        <Route path="/profile" element={<ProtectedRoute><Profile /></ProtectedRoute>} />
         <Route path="/feedback" element={<Feedback />} />
         <Route path="/privacy" element={<Privacy />} />
         <Route path="/terms" element={<Terms />} />

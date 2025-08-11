@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { 
   User, 
   Settings, 
@@ -21,12 +21,12 @@ import {
   ArrowLeft
 } from "lucide-react";
 import { useNavigate, useLocation } from "react-router-dom";
+import { useAuth } from "../contexts/AuthContext";
 import PandauraOrb from "../components/PandauraOrb";
 
 interface UserProfile {
   name: string;
   email: string;
-  phone: string;
   company: string;
   timezone: string;
   language: string;
@@ -51,20 +51,42 @@ interface ProfilePreferences {
 export default function Profile() {
   const navigate = useNavigate();
   const location = useLocation();
+  const { user, organizations, selectedOrg, logout, isAuthenticated, isLoading } = useAuth();
+  
   const [activeTab, setActiveTab] = useState('overview');
   const [showPassword, setShowPassword] = useState(false);
   const [show2FASetup, setShow2FASetup] = useState(false);
 
+  // Redirect to sign in if not authenticated
+  useEffect(() => {
+    if (!isLoading && !isAuthenticated) {
+      navigate('/signin', { replace: true });
+    }
+  }, [isLoading, isAuthenticated, navigate]);
+
+  // Initialize profile with real user data
   const [profile, setProfile] = useState<UserProfile>({
-    name: "Matthew Hughes",
-    email: "matthew@example.com",
-    phone: "+1 (555) 123-4567",
-    company: "Pandaura Automation Systems",
+    name: user?.fullName || "Loading...",
+    email: user?.email || "Loading...",
+    company: selectedOrg?.org_name || "Loading...",
     timezone: "America/New_York",
     language: "English",
     tier: "Enterprise",
-    lastLogin: "Aug 4, 2025 - 8:22 PM"
+    lastLogin: "Loading..."
   });
+
+  // Update profile when user data changes
+  useEffect(() => {
+    if (user && selectedOrg) {
+      setProfile(prev => ({
+        ...prev,
+        name: user.fullName,
+        email: user.email,
+        company: selectedOrg.org_name || "Unknown Organization",
+        tier: selectedOrg.role as 'Individual' | 'Team' | 'Enterprise' || 'Enterprise'
+      }));
+    }
+  }, [user, selectedOrg]);
 
   const [preferences, setPreferences] = useState<ProfilePreferences>({
     defaultVendor: "Rockwell",
@@ -138,21 +160,14 @@ export default function Profile() {
             />
           </div>
           <div>
-            <label className="block text-sm font-medium mb-1">Phone (Optional)</label>
-            <input
-              type="tel"
-              value={profile.phone}
-              onChange={(e) => setProfile(prev => ({...prev, phone: e.target.value}))}
-              className="w-full border border-light rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-accent"
-            />
-          </div>
-          <div>
             <label className="block text-sm font-medium mb-1">Company Name</label>
             <input
               type="text"
               value={profile.company}
               onChange={(e) => setProfile(prev => ({...prev, company: e.target.value}))}
               className="w-full border border-light rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-accent"
+              disabled
+              placeholder="Based on current organization"
             />
           </div>
           <div>
@@ -218,6 +233,113 @@ export default function Profile() {
           <Save className="w-4 h-4" />
           Save Changes
         </button>
+      </div>
+
+      {/* Organization & Account Details */}
+      <div className="bg-white border border-light rounded-lg p-6">
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="text-lg font-medium">Organization & Account Details</h3>
+          {organizations.length > 1 && (
+            <span className="text-xs text-muted bg-blue-50 px-2 py-1 rounded">
+              {organizations.length} organizations
+            </span>
+          )}
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div className="space-y-4">
+            <div className="bg-gradient-to-r from-blue-50 to-indigo-50 p-4 rounded-lg border border-blue-100">
+              <label className="block text-sm font-medium text-blue-900 mb-2">Current Organization</label>
+              <p className="text-lg font-semibold text-blue-900">{selectedOrg?.org_name || 'Loading...'}</p>
+              <p className="text-sm text-blue-700 mt-1">{selectedOrg?.industry || 'Industry not specified'}</p>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-muted mb-2">Your Role & Permissions</label>
+              <div className="flex items-center gap-3">
+                <span className={`inline-flex px-3 py-1 rounded-full text-sm font-medium ${
+                  selectedOrg?.role === 'Admin' ? 'bg-red-100 text-red-800 border border-red-200' :
+                  selectedOrg?.role === 'Editor' ? 'bg-blue-100 text-blue-800 border border-blue-200' :
+                  selectedOrg?.role === 'Viewer' ? 'bg-green-100 text-green-800 border border-green-200' :
+                  'bg-gray-100 text-gray-800 border border-gray-200'
+                }`}>
+                  {selectedOrg?.role || 'Loading...'}
+                </span>
+                <span className="text-sm text-muted">
+                  {selectedOrg?.role === 'Admin' ? 'Full system access' :
+                   selectedOrg?.role === 'Editor' ? 'Create & modify content' :
+                   selectedOrg?.role === 'Viewer' ? 'View-only access' : ''}
+                </span>
+              </div>
+            </div>
+          </div>
+          <div className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium text-muted mb-1">Account Security</label>
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-sm">Two-Factor Authentication</span>
+                  <div className="flex items-center gap-2">
+                    <div className={`w-2 h-2 rounded-full ${user?.twoFactorEnabled ? 'bg-green-500' : 'bg-red-500'}`}></div>
+                    <span className={`text-sm font-medium ${user?.twoFactorEnabled ? 'text-green-700' : 'text-red-700'}`}>
+                      {user?.twoFactorEnabled ? 'Enabled' : 'Disabled'}
+                    </span>
+                  </div>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-sm">Account ID</span>
+                  <code className="text-xs bg-gray-100 px-2 py-1 rounded font-mono">
+                    {user?.userId?.substring(0, 8) || '...'}
+                  </code>
+                </div>
+              </div>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-muted mb-1">Organization Details</label>
+              <div className="space-y-1 text-sm">
+                <div className="flex justify-between">
+                  <span className="text-muted">Size:</span>
+                  <span className="font-medium">{selectedOrg?.size || 'Not specified'}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-muted">License:</span>
+                  <span className="font-medium">On-Premise</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        
+        {/* Multiple Organizations */}
+        {organizations && organizations.length > 1 && (
+          <div className="mt-6 pt-6 border-t border-light">
+            <h4 className="text-sm font-medium mb-3">Your Organizations ({organizations.length})</h4>
+            <div className="space-y-2">
+              {organizations.map((org) => (
+                <div key={org.org_id} className={`p-3 rounded-lg border ${
+                  org.org_id === selectedOrg?.org_id ? 'border-accent bg-accent/5' : 'border-light'
+                }`}>
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="font-medium">{org.org_name}</p>
+                      <p className="text-sm text-muted">{org.industry || 'Industry not specified'}</p>
+                    </div>
+                    <div className="text-right">
+                      <span className={`inline-flex px-2 py-1 rounded text-xs font-medium ${
+                        org.role === 'Admin' ? 'bg-red-100 text-red-700' :
+                        org.role === 'Editor' ? 'bg-blue-100 text-blue-700' :
+                        'bg-green-100 text-green-700'
+                      }`}>
+                        {org.role}
+                      </span>
+                      {org.org_id === selectedOrg?.org_id && (
+                        <p className="text-xs text-accent mt-1">Current</p>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
@@ -526,35 +648,66 @@ export default function Profile() {
 
   return (
     <div className="flex flex-col h-screen bg-background">
-      {/* Profile Header */}
-      <header className="bg-white border-b border-light px-6 py-4">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-4">
-            <button
-              onClick={handleBackNavigation}
-              className="p-2 hover:bg-gray-100 rounded-md transition-colors flex items-center gap-2 text-muted hover:text-primary"
-              title="Go back"
-            >
-              <ArrowLeft className="w-5 h-5" />
-              <span className="text-sm">Back</span>
-            </button>
-            
-            <div className="w-12 h-12 bg-primary text-white rounded-full flex items-center justify-center font-bold text-lg">
-              {profile.name.split(' ').map(n => n[0]).join('')}
-            </div>
-            <div>
-              <h1 className="text-xl font-bold">{profile.name}</h1>
-              <div className="flex items-center gap-2 text-sm text-muted">
-                <span className="bg-blue-100 text-blue-700 px-2 py-1 rounded text-xs">
-                  {profile.tier}
-                </span>
-                <span>Last login: {profile.lastLogin}</span>
+      {/* Show loading state if auth is still loading or user data isn't available */}
+      {(isLoading || !user) ? (
+        <div className="flex-1 flex items-center justify-center">
+          <div className="text-center">
+            <div className="animate-spin w-8 h-8 border-2 border-primary border-t-transparent rounded-full mx-auto mb-4"></div>
+            <p className="text-muted">Loading profile...</p>
+          </div>
+        </div>
+      ) : (
+        <>
+          {/* Profile Header */}
+          <header className="bg-white border-b border-light px-6 py-4">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-4">
+                <button
+                  onClick={handleBackNavigation}
+                  className="p-2 hover:bg-gray-100 rounded-md transition-colors flex items-center gap-2 text-muted hover:text-primary"
+                  title="Go back"
+                >
+                  <ArrowLeft className="w-5 h-5" />
+                  <span className="text-sm">Back</span>
+                </button>
+                
+                <div className="w-12 h-12 bg-primary text-white rounded-full flex items-center justify-center font-bold text-lg">
+                  {profile.name ? profile.name.split(' ').map(n => n[0]).join('') : '??'}
+                </div>
+                <div>
+                  <h1 className="text-xl font-bold">{profile.name}</h1>
+                  <div className="flex items-center gap-2 text-sm text-muted">
+                    <span className={`px-2 py-1 rounded text-xs font-medium ${
+                      selectedOrg?.role === 'Admin' ? 'bg-red-100 text-red-700' :
+                      selectedOrg?.role === 'Editor' ? 'bg-blue-100 text-blue-700' :
+                      selectedOrg?.role === 'Viewer' ? 'bg-green-100 text-green-700' :
+                      'bg-gray-100 text-gray-700'
+                    }`}>
+                      {selectedOrg?.role || profile.tier}
+                    </span>
+                    {selectedOrg?.org_name && (
+                      <span>@ {selectedOrg.org_name}</span>
+                    )}
+                    <span>•</span>
+                    <span>Last login: {profile.lastLogin}</span>
+                  </div>
+                </div>
+              </div>
+              <div className="flex items-center gap-3">
+                <button className="text-sm text-muted hover:text-primary">Edit Profile</button>
+                <button 
+                  onClick={() => {
+                    logout();
+                    navigate('/signin');
+                  }}
+                  className="flex items-center gap-2 px-3 py-2 text-sm text-red-600 hover:text-red-700 hover:bg-red-50 rounded-md transition-colors"
+                >
+                  <LogOut className="w-4 h-4" />
+                  Sign Out
+                </button>
               </div>
             </div>
-          </div>
-          <button className="text-sm text-muted hover:text-primary">Edit Profile</button>
-        </div>
-      </header>
+          </header>
 
       <div className="flex flex-1 overflow-hidden">
         {/* Sidebar Navigation */}
@@ -594,16 +747,24 @@ export default function Profile() {
               <div className="text-sm text-left max-w-md mx-auto">
                 <div className="space-y-2">
                   <div className="flex justify-between">
-                    <span>Current Plan:</span>
-                    <span className="font-medium">{profile.tier}</span>
+                    <span>Current Role:</span>
+                    <span className="font-medium">{selectedOrg?.role || profile.tier}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span>Organization:</span>
+                    <span className="font-medium">{selectedOrg?.org_name || 'Loading...'}</span>
                   </div>
                   <div className="flex justify-between">
                     <span>License Type:</span>
                     <span className="font-medium">On-Premise</span>
                   </div>
                   <div className="flex justify-between">
-                    <span>Seats Available:</span>
-                    <span className="font-medium">Unlimited</span>
+                    <span>Access Level:</span>
+                    <span className="font-medium">
+                      {selectedOrg?.role === 'Admin' ? 'Full Access' :
+                       selectedOrg?.role === 'Editor' ? 'Edit & View' :
+                       selectedOrg?.role === 'Viewer' ? 'View Only' : 'Loading...'}
+                    </span>
                   </div>
                 </div>
               </div>
@@ -611,6 +772,8 @@ export default function Profile() {
           )}
         </main>
       </div>
+        </>
+      )}
       <PandauraOrb />
     </div>
   );

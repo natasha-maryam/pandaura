@@ -49,52 +49,19 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
   const isAuthenticated = !!token && !!user;
 
-  // Initialize auth state from localStorage
+  // Set axios auth header when token changes
   useEffect(() => {
-    const storedToken = localStorage.getItem('pandaura_token');
-    const storedUser = localStorage.getItem('pandaura_user');
-    const storedOrgs = localStorage.getItem('pandaura_orgs');
-    const storedSelectedOrg = localStorage.getItem('pandaura_selected_org');
-
-    if (storedToken && storedUser) {
-      setToken(storedToken);
-      setUser(JSON.parse(storedUser));
-      
-      if (storedOrgs) {
-        const orgs = JSON.parse(storedOrgs);
-        setOrganizations(orgs);
-        
-        if (storedSelectedOrg) {
-          setSelectedOrg(JSON.parse(storedSelectedOrg));
-        } else if (orgs.length > 0) {
-          setSelectedOrg(orgs[0]);
-        }
-      }
-
-      // Set default auth header
-      axios.defaults.headers.common['Authorization'] = `Bearer ${storedToken}`;
-    }
-    setIsLoading(false);
-  }, []);
-
-  // Update localStorage when auth state changes
-  useEffect(() => {
-    if (token && user) {
-      localStorage.setItem('pandaura_token', token);
-      localStorage.setItem('pandaura_user', JSON.stringify(user));
-      localStorage.setItem('pandaura_orgs', JSON.stringify(organizations));
-      if (selectedOrg) {
-        localStorage.setItem('pandaura_selected_org', JSON.stringify(selectedOrg));
-      }
+    if (token) {
       axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
     } else {
-      localStorage.removeItem('pandaura_token');
-      localStorage.removeItem('pandaura_user');
-      localStorage.removeItem('pandaura_orgs');
-      localStorage.removeItem('pandaura_selected_org');
       delete axios.defaults.headers.common['Authorization'];
     }
-  }, [token, user, organizations, selectedOrg]);
+  }, [token]);
+
+  // Initialize loading state
+  useEffect(() => {
+    setIsLoading(false);
+  }, []);
 
   const login = async (email: string, password: string, twoFactorToken?: string) => {
     try {
@@ -108,16 +75,30 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         return { requiresTwoFactor: true, success: false, message: response.data.message };
       }
 
-      const { token: newToken, userId, orgId, role, orgName, organizations: userOrgs } = response.data;
+      const { 
+        token: newToken, 
+        userId, 
+        fullName, 
+        email: userEmail, 
+        twoFactorEnabled, 
+        orgId, 
+        role, 
+        orgName, 
+        organizations: userOrgs 
+      } = response.data;
       
+      // Set token first
       setToken(newToken);
+      
+      // Set user data
       setUser({
         userId,
-        fullName: '', // Will be updated when we fetch user details
-        email,
-        twoFactorEnabled: false // Will be updated when we fetch user details
+        fullName: fullName || '',
+        email: userEmail || email,
+        twoFactorEnabled: twoFactorEnabled || false
       });
 
+      // Format and set organizations data
       const formattedOrgs = userOrgs.map((org: any) => ({
         org_id: org.org_id,
         org_name: org.org_name,
@@ -128,7 +109,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
       setOrganizations(formattedOrgs);
       
-      // Set selected org to the primary one from login
+      // Set selected org to the primary one from login response
       const primaryOrg = formattedOrgs.find((org: OrgInfo) => org.org_id === orgId) || formattedOrgs[0];
       setSelectedOrg(primaryOrg);
 
@@ -162,7 +143,10 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       
       const { token: newToken, userId, orgId, role } = response.data;
       
+      // Set token first
       setToken(newToken);
+      
+      // Set user data
       setUser({
         userId,
         fullName: orgData.fullName,
@@ -170,6 +154,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         twoFactorEnabled: false
       });
 
+      // Create organization data
       const newOrg: OrgInfo = {
         org_id: orgId,
         org_name: orgData.orgName,
@@ -220,7 +205,10 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       
       const { token: newToken, userId, orgId, role } = response.data;
       
+      // Set token first
       setToken(newToken);
+      
+      // Set basic user data
       setUser({
         userId,
         fullName: inviteData.fullName,
@@ -228,7 +216,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         twoFactorEnabled: false
       });
 
-      // Fetch user's organizations
+      // Fetch complete user's organizations data
       const orgsResponse = await axios.get(`/auth/users/${userId}/orgs`, {
         headers: { Authorization: `Bearer ${newToken}` }
       });
@@ -242,6 +230,8 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       }));
 
       setOrganizations(formattedOrgs);
+      
+      // Set selected org to the primary one from invite
       const primaryOrg = formattedOrgs.find((org: OrgInfo) => org.org_id === orgId) || formattedOrgs[0];
       setSelectedOrg(primaryOrg);
 
