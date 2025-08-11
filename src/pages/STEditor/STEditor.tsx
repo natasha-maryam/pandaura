@@ -156,7 +156,7 @@ export default function STEditor({ initialCode, vendorType, onChange }: Props) {
           onChange={handleEditorChange}
           onMount={(editor) => {
             // Set up selection listener
-            editor.onDidChangeCursorSelection((e) => {
+            editor.onDidChangeCursorSelection((e: any) => {
               handleTextSelection(e.selection);
             });
           }}
