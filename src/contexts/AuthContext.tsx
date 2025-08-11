@@ -34,10 +34,12 @@ interface AuthContextType {
   bindDevice: (instanceId: string, fingerprint: string) => Promise<{ success: boolean; message?: string }>;
 }
 
+import { config } from '../config/environment';
+
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-// Configure axios defaults
-const API_BASE_URL = 'http://localhost:5000/api/v1';
+// Configure axios defaults using environment-aware config
+const API_BASE_URL = `${config.apiBaseUrl}/api/v1`;
 axios.defaults.baseURL = API_BASE_URL;
 
 export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) => {

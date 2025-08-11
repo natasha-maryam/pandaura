@@ -5,6 +5,7 @@ import { Button, Input } from "../ui";
 import { useAuth } from "../../contexts/AuthContext";
 import { useSignUp } from "../../contexts/SignUpContext";
 import { useToast } from "../ui/Toast";
+import { config } from "../../config/environment";
 import logo from "../../assets/logo.png";
 
 function generateInstanceId() {
@@ -94,7 +95,7 @@ export default function SignUpEnvironment({
     try {
       // For signup flow, we'll use a special signup device binding
       // that doesn't require full authentication
-      const response = await fetch('http://localhost:5000/api/v1/auth/signup-device-bind', {
+      const response = await fetch(`${config.apiBaseUrl}/api/v1/auth/signup-device-bind`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

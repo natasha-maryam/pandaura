@@ -19,9 +19,15 @@ import { ModuleStateProvider } from "./contexts/ModuleStateContext";
 import { AuthProvider } from "./contexts/AuthContext";
 import { SignUpProvider } from "./contexts/SignUpContext";
 import { ToastProvider } from "./components/ui/Toast";
+import { debugConfig } from "./config/environment";
 import SignUp from "./pages/SignUp";
 
 export default function App() {
+  // Log configuration on app startup
+  React.useEffect(() => {
+    debugConfig();
+  }, []);
+
   return (
     <AuthProvider>
       <SignUpProvider>
