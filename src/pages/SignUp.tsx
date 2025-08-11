@@ -59,29 +59,11 @@ export default function SignUp() {
       // At this point, user and organization should already be created
       // We just need to do a final login to establish the session
       if (signUpData.organizationCreated) {
-        // If 2FA was set up during signup, user will need to provide TOTP
-        // For now, try login without 2FA token first
-        const loginResult = await login(
-          signUpData.accountData.email,
-          signUpData.accountData.password
-        );
-
-        if (loginResult.success) {
-          clearSignUpData();
-          navigate('/home');
-          return;
-        } else if (loginResult.requiresTwoFactor) {
-          // If 2FA is required, for now just proceed to login page where user can enter 2FA
-          clearSignUpData();
-          navigate('/signin', { 
-            state: { 
-              message: 'Account created successfully! Please sign in with your credentials and 2FA code.' 
-            } 
-          });
-          return;
-        } else {
-          throw new Error(loginResult.message || 'Failed to authenticate');
-        }
+        // Everything is already set up (organization created, user created, 2FA setup, consent agreed, device binded)
+        // Just clear the signup data and navigate to home
+        clearSignUpData();
+        navigate("/home");
+        return; // Exit the function here to prevent further execution
       }
 
       // Fallback for any remaining creation logic
@@ -129,7 +111,6 @@ export default function SignUp() {
       console.error('Sign up error:', error);
       // Handle error - you might want to show an error message
       alert('Sign up failed. Please try again.');
-    } finally {
       setIsLoading(false);
     }
   };
