@@ -9,6 +9,11 @@ export { default as ProjectCard } from './ProjectCard';
 export { default as ProjectTable } from './ProjectTable';
 export { default as QuickToolsList } from './QuickToolsList';
 
+// Export API and hooks
+export { ProjectsAPI } from './api';
+export { useProjects, useProject } from './hooks';
+export { ProjectsProvider, useProjectsContext } from './context';
+
 // Export color utilities
 export { getStatusColor, getVendorColor, getClientColor } from './colors';
 
@@ -22,5 +27,8 @@ export type {
   ProjectViewMode,
   QuickTool,
   FilterOption,
-  VersionChange
+  VersionChange,
+  ApiProject,
+  CreateProjectData,
+  UpdateProjectData
 } from './types';

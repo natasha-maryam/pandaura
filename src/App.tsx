@@ -7,7 +7,7 @@ import AskPandaura from "./pages/AskPandaura";
 import LogicStudio from "./pages/LogicStudio";
 import AutoDocs from "./pages/AutoDocs";
 import TagDatabaseManager from "./pages/TagDatabaseManager";
-import Projects from "./pages/Projects";
+// import Projects from "./pages/Projects";
 import Profile from "./pages/Profile";
 import SignIn from "./pages/SignIn";
 import Home from "./pages/Home";
@@ -15,6 +15,7 @@ import Feedback from "./pages/Feedback";
 import Privacy from "./pages/Privacy";
 import Terms from "./pages/Terms";
 import CaseStudies from "./pages/CaseStudies";
+import ProjectsDebug from "./pages/ProjectsDebug";
 import { ModuleStateProvider } from "./contexts/ModuleStateContext";
 import { AuthProvider } from "./contexts/AuthContext";
 import { SignUpProvider } from "./contexts/SignUpContext";
@@ -44,13 +45,16 @@ export default function App() {
         <Route path="/home/projects/:projectId" element={<Home />} />
         <Route path="/home/quick-tools" element={<Home />} />
         
+        {/* Debug Routes (Development Only) */}
+        <Route path="/debug/projects" element={<ProtectedRoute><ProjectsDebug /></ProtectedRoute>} />
+        
         {/* Full Project Workflow - Persistent Sessions */}
         <Route path="/app" element={<Navigate to="/pandaura-as" replace />} />
         <Route path="/pandaura-as" element={<ProtectedRoute><SharedLayout><AskPandaura /></SharedLayout></ProtectedRoute>} />
         <Route path="/logic-studio" element={<ProtectedRoute><SharedLayout><LogicStudio /></SharedLayout></ProtectedRoute>} />
         <Route path="/autodocs" element={<ProtectedRoute><SharedLayout><AutoDocs /></SharedLayout></ProtectedRoute>} />
         <Route path="/tag-database" element={<ProtectedRoute><SharedLayout><TagDatabaseManager /></SharedLayout></ProtectedRoute>} />
-        <Route path="/projects" element={<ProtectedRoute><SharedLayout><Projects /></SharedLayout></ProtectedRoute>} />
+        {/* <Route path="/projects" element={<ProtectedRoute><SharedLayout><Projects /></SharedLayout></ProtectedRoute>} /> */}
         <Route path="/case-studies" element={<ProtectedRoute><SharedLayout><CaseStudies /></SharedLayout></ProtectedRoute>} />
         
         {/* Quick Tools - One-time Sessions */}

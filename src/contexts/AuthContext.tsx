@@ -55,13 +55,44 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   useEffect(() => {
     if (token) {
       axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
+      // Persist token to localStorage
+      localStorage.setItem('authToken', token);
     } else {
       delete axios.defaults.headers.common['Authorization'];
+      // Remove token from localStorage
+      localStorage.removeItem('authToken');
     }
   }, [token]);
 
-  // Initialize loading state
+  // Initialize authentication state from localStorage
   useEffect(() => {
+    const storedToken = localStorage.getItem('authToken');
+    const storedUser = localStorage.getItem('authUser');
+    const storedOrgs = localStorage.getItem('authOrgs');
+    const storedSelectedOrg = localStorage.getItem('authSelectedOrg');
+
+    if (storedToken && storedUser) {
+      try {
+        setToken(storedToken);
+        setUser(JSON.parse(storedUser));
+        
+        if (storedOrgs) {
+          setOrganizations(JSON.parse(storedOrgs));
+        }
+        
+        if (storedSelectedOrg) {
+          setSelectedOrg(JSON.parse(storedSelectedOrg));
+        }
+      } catch (error) {
+        console.error('Failed to restore auth state:', error);
+        // Clear corrupted data
+        localStorage.removeItem('authToken');
+        localStorage.removeItem('authUser');
+        localStorage.removeItem('authOrgs');
+        localStorage.removeItem('authSelectedOrg');
+      }
+    }
+    
     setIsLoading(false);
   }, []);
 
@@ -92,13 +123,15 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       // Set token first
       setToken(newToken);
       
-      // Set user data
-      setUser({
+      // Set user data and persist to localStorage
+      const userData = {
         userId,
         fullName: fullName || '',
         email: userEmail || email,
         twoFactorEnabled: twoFactorEnabled || false
-      });
+      };
+      setUser(userData);
+      localStorage.setItem('authUser', JSON.stringify(userData));
 
       // Format and set organizations data
       const formattedOrgs = userOrgs.map((org: any) => ({
@@ -110,10 +143,12 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       }));
 
       setOrganizations(formattedOrgs);
+      localStorage.setItem('authOrgs', JSON.stringify(formattedOrgs));
       
       // Set selected org to the primary one from login response
       const primaryOrg = formattedOrgs.find((org: OrgInfo) => org.org_id === orgId) || formattedOrgs[0];
       setSelectedOrg(primaryOrg);
+      localStorage.setItem('authSelectedOrg', JSON.stringify(primaryOrg));
 
       return { success: true, message: 'Login successful' };
     } catch (error: any) {

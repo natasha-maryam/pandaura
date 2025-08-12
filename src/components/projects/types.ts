@@ -1,3 +1,35 @@
+// Backend API Types
+export interface ApiProject {
+  id: number;
+  user_id: string;
+  project_name: string;
+  client_name?: string;
+  project_type?: string;
+  description?: string;
+  target_plc_vendor?: 'siemens' | 'rockwell' | 'beckhoff';
+  autosave_state?: any; // JSON object
+  created_at: string;
+  updated_at: string;
+}
+
+// API Request/Response Types
+export interface CreateProjectData {
+  projectName: string;
+  clientName?: string;
+  projectType?: string;
+  description?: string;
+  targetPLCVendor?: 'siemens' | 'rockwell' | 'beckhoff';
+}
+
+export interface UpdateProjectData {
+  projectName?: string;
+  clientName?: string;
+  projectType?: string;
+  description?: string;
+  targetPLCVendor?: 'siemens' | 'rockwell' | 'beckhoff';
+}
+
+// Frontend Display Types (for existing components compatibility)
 export interface Project {
   id: number;
   name: string;
@@ -10,6 +42,32 @@ export interface Project {
   versions: ProjectVersion[];
   recentActivity: ProjectActivity[];
 }
+
+// Type converters between API and Display types
+export const convertApiToDisplay = (apiProject: ApiProject): Project => {
+  return {
+    id: apiProject.id,
+    name: apiProject.project_name,
+    client: apiProject.client_name || 'N/A',
+    vendor: apiProject.target_plc_vendor || 'N/A',
+    type: apiProject.project_type || '',
+    lastModified: apiProject.updated_at,
+    description: apiProject.description || '',
+    status: 'active', // Default status
+    versions: [], // Will be populated separately if needed
+    recentActivity: [] // Will be populated separately if needed
+  };
+};
+
+export const convertDisplayToApi = (project: Partial<Project>): any => {
+  return {
+    projectName: project.name,
+    clientName: project.client,
+    projectType: project.type,
+    targetPLCVendor: project.vendor as 'siemens' | 'rockwell' | 'beckhoff' | undefined,
+    description: project.description
+  };
+};
 
 export interface ProjectVersion {
   id: number;

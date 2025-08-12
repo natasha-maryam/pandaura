@@ -1,17 +1,65 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Modal, Button } from '../ui';
+import { useToast } from '../ui/Toast';
 import { Project } from './types';
+import { ProjectsAPI } from './api';
 
 interface DeleteProjectModalProps {
   project: Project | null;
   onClose: () => void;
   onConfirm: (project: Project) => void;
+  onSuccess?: () => void; // Callback for successful deletion to trigger refresh
 }
 
-export default function DeleteProjectModal({ project, onClose, onConfirm }: DeleteProjectModalProps) {
-  const handleConfirm = () => {
-    if (project) {
+export default function DeleteProjectModal({ 
+  project, 
+  onClose, 
+  onConfirm, 
+  onSuccess 
+}: DeleteProjectModalProps) {
+  const { showToast } = useToast();
+  const [isDeleting, setIsDeleting] = useState(false);
+
+  const handleConfirm = async () => {
+    if (!project) return;
+
+    try {
+      setIsDeleting(true);
+      
+      // Call the API to delete the project
+      await ProjectsAPI.deleteProject(project.id);
+      
+      // Show success toast
+      showToast({
+        variant: 'success',
+        title: 'Project Deleted',
+        message: `Project "${project.name}" has been deleted successfully.`,
+        duration: 4000
+      });
+      
+      // Call the original onConfirm for compatibility
       onConfirm(project);
+      
+      // Call the success callback to trigger refresh
+      if (onSuccess) {
+        onSuccess();
+      }
+      
+      // Close the modal
+      onClose();
+      
+    } catch (error: any) {
+      console.error('Failed to delete project:', error);
+      
+      // Show error toast
+      showToast({
+        variant: 'error',
+        title: 'Delete Failed',
+        message: error.message || 'Failed to delete project. Please try again.',
+        duration: 5000
+      });
+    } finally {
+      setIsDeleting(false);
     }
   };
 
@@ -33,14 +81,16 @@ export default function DeleteProjectModal({ project, onClose, onConfirm }: Dele
         <Button
           variant="ghost"
           onClick={onClose}
+          disabled={isDeleting}
         >
           Cancel
         </Button>
         <Button
           variant="danger"
           onClick={handleConfirm}
+          disabled={isDeleting}
         >
-          Delete Project
+          {isDeleting ? 'Deleting...' : 'Delete Project'}
         </Button>
       </div>
     </Modal>

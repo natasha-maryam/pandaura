@@ -21,12 +21,14 @@ import CreateProjectModal from "../components/projects/CreateProjectModal";
 import DeleteProjectModal from "../components/projects/DeleteProjectModal";
 import QuickToolsList from "../components/projects/QuickToolsList";
 
-// Import types directly
+// Import types and API
 import type { 
   Project, 
   NewProjectForm, 
   QuickTool
 } from "../components/projects/types";
+import { ProjectsAPI } from "../components/projects/api";
+import { convertApiToDisplay } from "../components/projects/types";
 
 const quickTools: QuickTool[] = [
   {
@@ -192,6 +194,9 @@ export default function Home() {
   const { isAuthenticated, isLoading, user, token } = useAuth();
   const [showNewProjectModal, setShowNewProjectModal] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState<Project | null>(null);
+  const [refreshTrigger, setRefreshTrigger] = useState(0);
+  const [selectedProject, setSelectedProject] = useState<Project | null>(null);
+  const [loadingProject, setLoadingProject] = useState(false);
 
   // Debug authentication state
   React.useEffect(() => {
@@ -203,27 +208,67 @@ export default function Home() {
       hasToken: !!token,
       currentPath: location.pathname 
     });
+    
+    // Debug token storage
+    console.log('Token storage debug:', {
+      contextToken: token ? `${token.substring(0, 10)}...` : 'none',
+      localStorageToken: localStorage.getItem('authToken') ? `${localStorage.getItem('authToken')!.substring(0, 10)}...` : 'none',
+      localStorageKeys: Object.keys(localStorage),
+      userInfo: user ? { userId: user.userId, email: user.email } : 'none'
+    });
   }, [isAuthenticated, isLoading, user, token, location.pathname]);
 
   // Determine current view based on URL
   const isProjectsView = location.pathname === '/home/projects';
   const isProjectOverview = location.pathname.startsWith('/home/projects/') && projectId;
   const isQuickToolsView = location.pathname === '/home/quick-tools';
-  
-  // Find selected project by ID from URL
-  const selectedProject = projectId ? mockProjects.find(p => p.id.toString() === projectId) || null : null;
+
+  // Load selected project from API when projectId changes
+  useEffect(() => {
+    const loadProject = async () => {
+      if (projectId && isAuthenticated && token) {
+        setLoadingProject(true);
+        try {
+          console.log('Loading project with ID:', projectId);
+          const apiProjects = await ProjectsAPI.getProjects();
+          console.log('All projects from API:', apiProjects.map(p => ({ id: p.id, name: p.project_name })));
+          
+          const foundProject = apiProjects.find(p => p.id.toString() === projectId);
+          if (foundProject) {
+            console.log('Found project:', foundProject.project_name);
+            setSelectedProject(convertApiToDisplay(foundProject));
+          } else {
+            console.warn('Project not found with ID:', projectId);
+            console.log('Available project IDs:', apiProjects.map(p => p.id));
+            setSelectedProject(null);
+          }
+        } catch (error) {
+          console.error('Failed to load project:', error);
+          setSelectedProject(null);
+        } finally {
+          setLoadingProject(false);
+        }
+      } else {
+        console.log('Clearing selected project - projectId:', projectId, 'isAuthenticated:', isAuthenticated, 'hasToken:', !!token);
+        setSelectedProject(null);
+        setLoadingProject(false);
+      }
+    };
+
+    loadProject();
+  }, [projectId, isAuthenticated, token]);
 
   const handleCreateProject = (projectData: NewProjectForm) => {
     // In real app, make API call here
     console.log('Creating project:', projectData);
-    // Refresh projects list, show success toast, etc.
+    // Trigger refresh of projects list
+    setRefreshTrigger(prev => prev + 1);
   };
 
   const handleDeleteProject = (project: Project) => {
-    // In real app, make API call here
-    console.log('Deleting project:', project.name);
-    // Refresh projects list, show success toast, etc.
-    setShowDeleteModal(null);
+    // This is now just a placeholder - actual deletion happens in DeleteProjectModal
+    console.log('Delete confirmed for project:', project.name);
+    // The modal handles the API call and triggers refresh via onSuccess callback
   };
 
   const handleOpenProjectOverview = (project: Project) => {
@@ -249,7 +294,93 @@ export default function Home() {
   };
 
   // Project Overview View
-  if (isProjectOverview && selectedProject) {
+  if (isProjectOverview) {
+    console.log('Project Overview View - Debug:', {
+      projectId,
+      isAuthenticated,
+      isLoading,
+      loadingProject,
+      selectedProject: selectedProject ? selectedProject.name : 'null',
+      pathname: location.pathname
+    });
+
+    // Check authentication first
+    if (isLoading) {
+      console.log('Auth loading, showing spinner');
+      return (
+        <div className="min-h-screen bg-background flex items-center justify-center">
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-4"></div>
+            <p className="text-secondary">Loading authentication...</p>
+          </div>
+        </div>
+      );
+    }
+    
+    if (!isAuthenticated) {
+      console.log('Project overview accessed but user not authenticated, redirecting to signin');
+      // Use setTimeout to ensure the redirect happens
+      setTimeout(() => navigate('/signin'), 100);
+      return (
+        <div className="min-h-screen bg-background flex items-center justify-center">
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-4"></div>
+            <p className="text-secondary">Redirecting to sign in...</p>
+          </div>
+        </div>
+      );
+    }
+
+    // Show loading while fetching project data
+    if (loadingProject) {
+      console.log('Project loading, showing spinner');
+      return (
+        <div className="min-h-screen bg-background flex items-center justify-center">
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-4"></div>
+            <p className="text-secondary">Loading project...</p>
+          </div>
+        </div>
+      );
+    }
+
+    // Show error if project not found
+    if (!selectedProject) {
+      console.log('Project not found, showing error state');
+      return (
+        <div className="min-h-screen bg-background">
+          {/* Header */}
+          <header className="flex items-center justify-between bg-surface px-6 py-4 border-b border-light shadow">
+            <div className="flex items-center gap-3">
+              <img 
+                src={logo} 
+                alt="Pandaura Logo" 
+                className="h-16 w-auto filter-none" 
+                style={{ filter: 'none', imageRendering: 'crisp-edges' }}
+              />
+            </div>
+            <div className="flex items-center space-x-4">
+              <NavbarIcons />
+            </div>
+          </header>
+          
+          <div className="flex items-center justify-center" style={{ height: 'calc(100vh - 88px)' }}>
+            <div className="text-center">
+              <FolderOpen className="w-16 h-16 text-muted mx-auto mb-4" />
+              <h3 className="text-lg font-medium text-primary mb-2">Project not found</h3>
+              <p className="text-secondary mb-4">
+                The requested project (ID: {projectId}) could not be found or you don't have access to it.
+              </p>
+              <Button onClick={() => navigate('/home/projects')}>
+                Back to Projects
+              </Button>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    console.log('Rendering project overview for:', selectedProject.name);
     return (
       <div className="min-h-screen bg-background">
         {/* Header */}
@@ -278,6 +409,32 @@ export default function Home() {
 
   // Projects List View
   if (isProjectsView) {
+    // Check if user is authenticated before showing projects
+    if (isLoading) {
+      return (
+        <div className="min-h-screen bg-background flex items-center justify-center">
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-4"></div>
+            <p className="text-secondary">Loading authentication...</p>
+          </div>
+        </div>
+      );
+    }
+    
+    if (!isAuthenticated) {
+      console.log('Projects view accessed but user not authenticated, redirecting to signin');
+      // Use setTimeout to ensure the redirect happens
+      setTimeout(() => navigate('/signin'), 100);
+      return (
+        <div className="min-h-screen bg-background flex items-center justify-center">
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-4"></div>
+            <p className="text-secondary">Redirecting to sign in...</p>
+          </div>
+        </div>
+      );
+    }
+
     return (
       <div className="min-h-screen bg-background">
         {/* Header */}
@@ -296,23 +453,25 @@ export default function Home() {
         </header>
 
         <ProjectsList
-          projects={mockProjects}
           onBack={() => navigate('/home')}
           onOpenProject={handleOpenProjectOverview}
           onDeleteProject={(project: Project) => setShowDeleteModal(project)}
           onNewProject={() => setShowNewProjectModal(true)}
+          refreshTrigger={refreshTrigger}
         />
 
         <CreateProjectModal
           isOpen={showNewProjectModal}
           onClose={() => setShowNewProjectModal(false)}
           onSubmit={handleCreateProject}
+          onSuccess={() => setRefreshTrigger(prev => prev + 1)}
         />
 
         <DeleteProjectModal
           project={showDeleteModal}
           onClose={() => setShowDeleteModal(null)}
           onConfirm={handleDeleteProject}
+          onSuccess={() => setRefreshTrigger(prev => prev + 1)}
         />
       </div>
     );

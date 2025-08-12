@@ -14,6 +14,10 @@ export const getStatusColor = (status: string) => {
 };
 
 export const getVendorColor = (vendor: string) => {
+  if (!vendor || vendor === 'N/A') {
+    return 'bg-gray-100 text-gray-500';
+  }
+  
   switch (vendor.toLowerCase()) {
     case 'rockwell':
     case 'rockwell automation': 
@@ -33,6 +37,9 @@ export const getVendorColor = (vendor: string) => {
 };
 
 export const getClientColor = (client: string) => {
+  if (!client || client === 'N/A') {
+    return 'bg-gray-100 text-gray-500';
+  }
   // Optional: Add client-specific colors if needed
   return 'bg-purple-100 text-purple-700';
 };
