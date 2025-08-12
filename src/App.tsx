@@ -40,6 +40,9 @@ export default function App() {
         <Route path="/signup" element={<SignUp />} />
         <Route path="/signin" element={<SignIn />} />
         <Route path="/home" element={<Home />} />
+        <Route path="/home/projects" element={<Home />} />
+        <Route path="/home/projects/:projectId" element={<Home />} />
+        <Route path="/home/quick-tools" element={<Home />} />
         
         {/* Full Project Workflow - Persistent Sessions */}
         <Route path="/app" element={<Navigate to="/pandaura-as" replace />} />

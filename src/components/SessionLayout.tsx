@@ -16,7 +16,7 @@ export default function SessionLayout({ children }: SessionLayoutProps) {
       <header className="flex items-center justify-between bg-surface px-6 py-4 border-b border-light shadow">
         <div className="flex items-center gap-4">
           <button
-            onClick={() => navigate("/home")}
+            onClick={() => navigate(-1)}
             className="p-2 hover:bg-background rounded-md transition-colors"
             title="Back to Home"
           >

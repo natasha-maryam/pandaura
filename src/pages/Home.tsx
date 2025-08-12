@@ -1,5 +1,6 @@
-import React from "react";
-import { useNavigate } from "react-router-dom";
+import React, { useState, useEffect } from "react";
+import { useNavigate, useParams, useLocation } from "react-router-dom";
+import { useAuth } from "../contexts/AuthContext";
 import { 
   ArrowRight, 
   MessageCircle, 
@@ -7,14 +8,27 @@ import {
   FileText, 
   Database, 
   Zap,
-  Clock,
   FolderOpen
 } from "lucide-react";
 import logo from "../assets/logo.png";
 import NavbarIcons from "./NavbarIcons";
 import { Card, Button } from "../components/ui";
 
-const quickTools = [
+// Import components directly to avoid barrel export issues
+import ProjectsList from "../components/projects/ProjectsList";
+import ProjectOverview from "../components/projects/ProjectOverview";
+import CreateProjectModal from "../components/projects/CreateProjectModal";
+import DeleteProjectModal from "../components/projects/DeleteProjectModal";
+import QuickToolsList from "../components/projects/QuickToolsList";
+
+// Import types directly
+import type { 
+  Project, 
+  NewProjectForm, 
+  QuickTool
+} from "../components/projects/types";
+
+const quickTools: QuickTool[] = [
   {
     name: "Logic Studio",
     icon: Cpu,
@@ -52,16 +66,286 @@ const quickTools = [
   },
 ];
 
-// Mock recent projects data
-const recentProjects = [
-  { name: "Water Treatment Plant", lastModified: "2 hours ago", vendor: "Rockwell" },
-  { name: "Packaging Line Control", lastModified: "1 day ago", vendor: "Siemens" },
-  { name: "HVAC System Integration", lastModified: "3 days ago", vendor: "Beckhoff" },
+// Enhanced mock project data with detailed version history
+const mockProjects: Project[] = [
+  { 
+    id: 1,
+    name: "Automation Line Upgrade", 
+    client: "ACME Corp",
+    vendor: "Siemens",
+    type: "Migration",
+    lastModified: "2 days ago", 
+    description: "Migration of legacy PLCs to new hardware with safety integration.",
+    status: "active",
+    versions: [
+      { 
+        id: 15, 
+        type: "Autosave", 
+        user: "UserA", 
+        timestamp: "2025-08-10T15:30:00Z",
+        message: "Added safety interlock system for conveyor belt operations",
+        changes: [
+          { file: 'src/logic/main.st', type: 'modified', linesAdded: 15, linesRemoved: 8 },
+          { file: 'src/tags/safety_tags.xml', type: 'added', linesAdded: 25, linesRemoved: 0 },
+          { file: 'docs/safety_requirements.md', type: 'modified', linesAdded: 12, linesRemoved: 3 }
+        ]
+      },
+      { 
+        id: 14, 
+        type: "Manual Save", 
+        user: "UserB", 
+        timestamp: "2025-08-09T17:45:00Z",
+        message: "Updated HMI screens for new operator interface",
+        changes: [
+          { file: 'src/hmi/main_screen.xml', type: 'modified', linesAdded: 42, linesRemoved: 18 },
+          { file: 'src/hmi/alarms.xml', type: 'modified', linesAdded: 8, linesRemoved: 2 }
+        ]
+      },
+      { 
+        id: 13, 
+        type: "Manual Save", 
+        user: "UserA", 
+        timestamp: "2025-08-08T14:20:00Z",
+        message: "Initial project setup and basic motor control logic",
+        changes: [
+          { file: 'src/logic/main.st', type: 'added', linesAdded: 156, linesRemoved: 0 },
+          { file: 'src/tags/process_tags.xml', type: 'added', linesAdded: 89, linesRemoved: 0 }
+        ]
+      },
+    ],
+    recentActivity: [
+      { action: "Updated Logic Studio variables", user: "UserA", timestamp: "2 hours ago", details: "Modified safety interlock logic" },
+      { action: "Generated Autodocs report", user: "UserA", timestamp: "1 day ago", details: "Created safety system documentation" },
+      { action: "Imported tag database", user: "UserB", timestamp: "2 days ago", details: "Imported 150 process tags from CSV" },
+    ]
+  },
+  { 
+    id: 2,
+    name: "Smart Factory Build", 
+    client: "BetaCo Industries",
+    vendor: "Rockwell",
+    type: "New Installation", 
+    lastModified: "1 day ago",
+    description: "New installation with integrated safety systems and IoT connectivity.",
+    status: "active",
+    versions: [
+      { 
+        id: 8, 
+        type: "Manual Save", 
+        user: "UserC", 
+        timestamp: "2025-08-09T14:20:00Z",
+        message: "Implemented IoT data collection module",
+        changes: [
+          { file: 'src/logic/iot_handler.st', type: 'added', linesAdded: 78, linesRemoved: 0 },
+          { file: 'src/comms/ethernet_config.xml', type: 'modified', linesAdded: 15, linesRemoved: 5 }
+        ]
+      },
+      { 
+        id: 7, 
+        type: "Autosave", 
+        user: "UserC", 
+        timestamp: "2025-08-08T16:35:00Z",
+        message: "Basic production line control setup",
+        changes: [
+          { file: 'src/logic/production.st', type: 'added', linesAdded: 234, linesRemoved: 0 }
+        ]
+      },
+    ],
+    recentActivity: [
+      { action: "Imported tag database CSV", user: "UserB", timestamp: "6 hours ago", details: "Added 89 IoT sensor tags" },
+      { action: "Updated communication settings", user: "UserC", timestamp: "1 day ago", details: "Configured Ethernet/IP parameters" },
+    ]
+  },
+  { 
+    id: 3,
+    name: "HVAC System Integration", 
+    client: "Delta Facilities",
+    vendor: "Beckhoff",
+    type: "Integration",
+    lastModified: "3 days ago",
+    description: "Building automation system with energy monitoring capabilities.",
+    status: "archived",
+    versions: [
+      { 
+        id: 22, 
+        type: "Manual Save", 
+        user: "UserA", 
+        timestamp: "2025-08-07T16:15:00Z",
+        message: "Final system validation and documentation",
+        changes: [
+          { file: 'docs/commissioning_report.md', type: 'added', linesAdded: 156, linesRemoved: 0 },
+          { file: 'src/logic/energy_monitor.st', type: 'modified', linesAdded: 12, linesRemoved: 8 }
+        ]
+      },
+    ],
+    recentActivity: [
+      { action: "Finalized project documentation", user: "UserA", timestamp: "3 days ago", details: "Completed commissioning report" },
+      { action: "System validation completed", user: "UserA", timestamp: "4 days ago", details: "All tests passed successfully" },
+    ]
+  },
 ];
 
 export default function Home() {
   const navigate = useNavigate();
+  const location = useLocation();
+  const { projectId } = useParams();
+  const { isAuthenticated, isLoading, user, token } = useAuth();
+  const [showNewProjectModal, setShowNewProjectModal] = useState(false);
+  const [showDeleteModal, setShowDeleteModal] = useState<Project | null>(null);
 
+  // Debug authentication state
+  React.useEffect(() => {
+    console.log('Home component mounted/updated');
+    console.log('Authentication state:', { 
+      isAuthenticated, 
+      isLoading, 
+      hasUser: !!user, 
+      hasToken: !!token,
+      currentPath: location.pathname 
+    });
+  }, [isAuthenticated, isLoading, user, token, location.pathname]);
+
+  // Determine current view based on URL
+  const isProjectsView = location.pathname === '/home/projects';
+  const isProjectOverview = location.pathname.startsWith('/home/projects/') && projectId;
+  const isQuickToolsView = location.pathname === '/home/quick-tools';
+  
+  // Find selected project by ID from URL
+  const selectedProject = projectId ? mockProjects.find(p => p.id.toString() === projectId) || null : null;
+
+  const handleCreateProject = (projectData: NewProjectForm) => {
+    // In real app, make API call here
+    console.log('Creating project:', projectData);
+    // Refresh projects list, show success toast, etc.
+  };
+
+  const handleDeleteProject = (project: Project) => {
+    // In real app, make API call here
+    console.log('Deleting project:', project.name);
+    // Refresh projects list, show success toast, etc.
+    setShowDeleteModal(null);
+  };
+
+  const handleOpenProjectOverview = (project: Project) => {
+    navigate(`/home/projects/${project.id}`);
+  };
+
+  const handleOpenProjectWorkspace = (project: Project) => {
+    // Debug authentication state
+    console.log('Opening workspace for project:', project.name);
+    console.log('Authentication state:', { isAuthenticated, isLoading });
+    
+    // Check if user is authenticated before allowing workspace access
+    if (!isAuthenticated) {
+      console.log('User not authenticated, redirecting to login');
+      // Redirect to login if not authenticated
+      navigate('/signin');
+      return;
+    }
+    
+    console.log('User authenticated, navigating to workspace');
+    // Navigate to full project workspace
+    navigate('/app', { state: { project } });
+  };
+
+  // Project Overview View
+  if (isProjectOverview && selectedProject) {
+    return (
+      <div className="min-h-screen bg-background">
+        {/* Header */}
+        <header className="flex items-center justify-between bg-surface px-6 py-4 border-b border-light shadow">
+          <div className="flex items-center gap-3">
+            <img 
+              src={logo} 
+              alt="Pandaura Logo" 
+              className="h-16 w-auto filter-none" 
+              style={{ filter: 'none', imageRendering: 'crisp-edges' }}
+            />
+          </div>
+          <div className="flex items-center space-x-4">
+            <NavbarIcons />
+          </div>
+        </header>
+
+        <ProjectOverview
+          project={selectedProject}
+          onBack={() => navigate('/home/projects')}
+          onOpenWorkspace={handleOpenProjectWorkspace}
+        />
+      </div>
+    );
+  }
+
+  // Projects List View
+  if (isProjectsView) {
+    return (
+      <div className="min-h-screen bg-background">
+        {/* Header */}
+        <header className="flex items-center justify-between bg-surface px-6 py-4 border-b border-light shadow">
+          <div className="flex items-center gap-3">
+            <img 
+              src={logo} 
+              alt="Pandaura Logo" 
+              className="h-16 w-auto filter-none" 
+              style={{ filter: 'none', imageRendering: 'crisp-edges' }}
+            />
+          </div>
+          <div className="flex items-center space-x-4">
+            <NavbarIcons />
+          </div>
+        </header>
+
+        <ProjectsList
+          projects={mockProjects}
+          onBack={() => navigate('/home')}
+          onOpenProject={handleOpenProjectOverview}
+          onDeleteProject={(project: Project) => setShowDeleteModal(project)}
+          onNewProject={() => setShowNewProjectModal(true)}
+        />
+
+        <CreateProjectModal
+          isOpen={showNewProjectModal}
+          onClose={() => setShowNewProjectModal(false)}
+          onSubmit={handleCreateProject}
+        />
+
+        <DeleteProjectModal
+          project={showDeleteModal}
+          onClose={() => setShowDeleteModal(null)}
+          onConfirm={handleDeleteProject}
+        />
+      </div>
+    );
+  }
+
+  // Quick Tools View
+  if (isQuickToolsView) {
+    return (
+      <div className="min-h-screen bg-background">
+        {/* Header */}
+        <header className="flex items-center justify-between bg-surface px-6 py-4 border-b border-light shadow">
+          <div className="flex items-center gap-3">
+            <img 
+              src={logo} 
+              alt="Pandaura Logo" 
+              className="h-16 w-auto filter-none" 
+              style={{ filter: 'none', imageRendering: 'crisp-edges' }}
+            />
+          </div>
+          <div className="flex items-center space-x-4">
+            <NavbarIcons />
+          </div>
+        </header>
+
+        <QuickToolsList
+          tools={quickTools}
+          onBack={() => navigate('/home')}
+        />
+      </div>
+    );
+  }
+
+  // Home View - Default Landing Page
   return (
     <div className="min-h-screen bg-background">
       {/* Header */}
@@ -94,81 +378,46 @@ export default function Home() {
         {/* Main Options */}
         <div className="grid md:grid-cols-2 gap-8 mb-16">
           {/* Full Project Workflow */}
-          <Card variant="elevated" icon={FolderOpen} title="Start Full Project Workflow" subtitle="Access all modules with persistent history, tagging, and AI memory." className="text-center">
+          <Card variant="elevated" icon={FolderOpen} title="Projects" subtitle="Manage your automation projects with full history and collaboration." className="text-center">
             <div>
-            
-            {/* Recent Projects */}
-            {recentProjects.length > 0 && (
               <div className="mb-6">
-                <h4 className="text-sm font-medium text-secondary mb-3">Recent Projects</h4>
-                <div className="space-y-2">
-                  {recentProjects.map((project, index) => (
-                    <button
-                      key={index}
-                      onClick={() => navigate("/app")}
-                      className="w-full text-left p-3 bg-background rounded-md border border-light hover:border-accent hover:shadow-sm transition-all"
-                    >
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <p className="text-sm font-medium text-primary">{project.name}</p>
-                          <p className="text-xs text-muted">{project.vendor} • {project.lastModified}</p>
-                        </div>
-                        <Clock className="w-4 h-4 text-muted" />
-                      </div>
-                    </button>
-                  ))}
-                </div>
+                <p className="text-xs text-secondary bg-background rounded-md p-3 border border-light">
+                  Access all modules with persistent project history, version control, and team collaboration features.
+                </p>
               </div>
-            )}
 
-            <Button
-              onClick={() => navigate("/app")}
-              className="w-full py-4"
-              icon={ArrowRight}
-              iconPosition="right"
-              size="lg"
-            >
-              Start Full Project Workflow
-            </Button>
+              <Button
+                onClick={() => navigate('/home/projects')}
+                className="w-full py-4"
+                icon={ArrowRight}
+                iconPosition="right"
+                size="lg"
+              >
+                Browse Projects
+              </Button>
             </div>
           </Card>
 
           {/* Quick Tools */}
           <Card variant="elevated" icon={Zap} title="Quick Tools" subtitle="Single-use sessions for quick tasks and testing." className="text-center">
-            <div className="mb-6">
-              <p className="text-xs text-secondary bg-background rounded-md p-3 border border-light">
-                These tools are available for one-time use. You can upload files, use all features, 
-                and export results — but your session will not be saved.
-              </p>
-            </div>
+            <div>
+              <div className="mb-6">
+                <p className="text-xs text-secondary bg-background rounded-md p-3 border border-light">
+                  These tools are available for one-time use. You can upload files, use all features, 
+                  and export results — but your session will not be saved.
+                </p>
+              </div>
 
-            <div className="grid gap-3">
-              {quickTools.map((tool) => (
-                <button
-                  key={tool.name}
-                  onClick={() => !tool.comingSoon && navigate(tool.path)}
-                  disabled={tool.comingSoon}
-                  className={`flex items-center gap-3 p-4 bg-background rounded-md border border-light transition-all text-left relative ${
-                    tool.comingSoon 
-                      ? 'opacity-75 cursor-not-allowed' 
-                      : 'hover:border-accent hover:shadow-sm'
-                  }`}
-                >
-                  <tool.icon className="w-5 h-5 text-accent flex-shrink-0" />
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 mb-1">
-                      <h4 className="text-sm font-medium text-primary">{tool.name}</h4>
-                      {tool.comingSoon && (
-                        <span className="bg-green-100 text-green-700 text-xs px-2 py-0.5 rounded-full border border-green-200 whitespace-nowrap">
-                          Coming Soon
-                        </span>
-                      )}
-                    </div>
-                    <p className="text-xs text-muted">{tool.description}</p>
-                  </div>
-                  {!tool.comingSoon && <ArrowRight className="w-4 h-4 text-muted flex-shrink-0" />}
-                </button>
-              ))}
+              <Button
+                onClick={() => navigate('/home/quick-tools')}
+                className="w-full py-4"
+                variant="outline"
+                icon={ArrowRight}
+                iconPosition="right"
+                size="lg"
+              >
+                Launch Quick Tools
+              </Button>
             </div>
           </Card>
         </div>
@@ -176,13 +425,13 @@ export default function Home() {
         {/* Divider */}
         <div className="flex items-center justify-center mb-8">
           <div className="h-px bg-light flex-1"></div>
-          <span className="px-4 text-sm text-muted">OR</span>
+          <span className="px-4 text-sm text-muted">Pandaura Labs</span>
           <div className="h-px bg-light flex-1"></div>
         </div>
 
         {/* Footer Links */}
         <div className="text-center text-sm text-muted space-x-6">
-          <span>Pandaura Labs © 2025</span>
+          <span>© 2025</span>
           <button 
             onClick={() => navigate("/feedback")}
             className="hover:text-primary transition-colors"

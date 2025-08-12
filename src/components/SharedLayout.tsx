@@ -16,11 +16,12 @@ import { useModuleState } from "../contexts/ModuleStateContext";
 import { config, getHostInfo, isOffline } from "../config/environment";
 
 const tools = [
-  { name: "Pandaura AS", path: "/pandaura-as", icon: MessageCircle },
   { name: "Logic Studio", path: "/logic-studio", icon: Cpu },
-  { name: "AutoDocs", path: "/autodocs", icon: FileText },
   { name: "Tag Database Manager", path: "/tag-database", icon: Database },
-  { name: "Projects", path: "/projects", icon: Download },
+  { name: "AutoDocs", path: "/autodocs", icon: FileText },
+  { name: "Pandaura AS", path: "/pandaura-as", icon: MessageCircle },
+    // { name: "SignalFlow", path: "/pandaura-as", icon: MessageCircle },
+  // { name: "Projects", path: "/projects", icon: Download },
 ] as const;
 
 const toolDescriptions = {
