@@ -1,6 +1,7 @@
 // API client for tags endpoints
+import { config } from '../../config/environment';
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api/v1';
+const API_BASE_URL = `${config.apiBaseUrl}/api/v1`;
 
 export interface Tag {
   id: string;
