@@ -275,11 +275,7 @@ export default function Home() {
     navigate(`/home/projects/${project.id}`);
   };
 
-  const handleOpenProjectWorkspace = (project: Project) => {
-    // Debug authentication state
-    console.log('Opening workspace for project:', project.name);
-    console.log('Authentication state:', { isAuthenticated, isLoading });
-    
+  const handleOpenProjectWorkspace = (project: Project) => {    
     // Check if user is authenticated before allowing workspace access
     if (!isAuthenticated) {
       console.log('User not authenticated, redirecting to login');
@@ -289,8 +285,9 @@ export default function Home() {
     }
     
     console.log('User authenticated, navigating to workspace');
-    // Navigate to full project workspace
-    navigate('/app', { state: { project } });
+    // Navigate to project workspace with project ID
+    localStorage.setItem('currentProjectId', project.id.toString());
+    navigate(`/workspace/${project.id}/pandaura-as`, { state: { project } });
   };
 
   // Project Overview View

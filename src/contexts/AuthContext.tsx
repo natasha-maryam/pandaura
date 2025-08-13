@@ -51,6 +51,17 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
   const isAuthenticated = !!token && !!user;
 
+  // Debug authentication state changes
+  useEffect(() => {
+    console.log('🔍 AuthContext: Authentication state changed:', {
+      isAuthenticated,
+      hasToken: !!token,
+      hasUser: !!user,
+      userEmail: user?.email,
+      isLoading
+    });
+  }, [isAuthenticated, token, user, isLoading]);
+
   // Set axios auth header when token changes
   useEffect(() => {
     if (token) {
@@ -66,15 +77,28 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
   // Initialize authentication state from localStorage
   useEffect(() => {
+    console.log('🔍 AuthContext: Initializing authentication state');
     const storedToken = localStorage.getItem('authToken');
     const storedUser = localStorage.getItem('authUser');
     const storedOrgs = localStorage.getItem('authOrgs');
     const storedSelectedOrg = localStorage.getItem('authSelectedOrg');
 
+    console.log('🔍 AuthContext: Stored data found:', {
+      hasToken: !!storedToken,
+      hasUser: !!storedUser,
+      hasOrgs: !!storedOrgs,
+      hasSelectedOrg: !!storedSelectedOrg,
+      tokenPrefix: storedToken ? `${storedToken.substring(0, 10)}...` : 'none'
+    });
+
     if (storedToken && storedUser) {
       try {
+        console.log('🔍 AuthContext: Restoring authentication state');
+        const userData = JSON.parse(storedUser);
+        
+        // Set user and token immediately
+        setUser(userData);
         setToken(storedToken);
-        setUser(JSON.parse(storedUser));
         
         if (storedOrgs) {
           setOrganizations(JSON.parse(storedOrgs));
@@ -83,6 +107,11 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         if (storedSelectedOrg) {
           setSelectedOrg(JSON.parse(storedSelectedOrg));
         }
+        
+        console.log('🔍 AuthContext: Authentication state restored successfully', {
+          userEmail: userData.email,
+          userId: userData.userId
+        });
       } catch (error) {
         console.error('Failed to restore auth state:', error);
         // Clear corrupted data
@@ -91,8 +120,11 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         localStorage.removeItem('authOrgs');
         localStorage.removeItem('authSelectedOrg');
       }
+    } else {
+      console.log('🔍 AuthContext: No stored authentication data found');
     }
     
+    // Set loading to false only after attempting to restore auth state
     setIsLoading(false);
   }, []);
 

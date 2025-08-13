@@ -1,5 +1,5 @@
 import React, { useState, useCallback, useMemo } from "react";
-import { useNavigate, useLocation } from "react-router-dom";
+import { useNavigate, useLocation, useParams } from "react-router-dom";
 import {
   Menu,
   MessageCircle,
@@ -51,17 +51,50 @@ export default function SharedLayout({ children }: SharedLayoutProps) {
   const [showSaveModal, setShowSaveModal] = useState(false);
   const navigate = useNavigate();
   const location = useLocation();
+  const { projectId } = useParams<{ projectId: string }>();
   const { saveModuleState } = useModuleState();
+
+  // Check if we're in a project workspace context
+  const isProjectWorkspace = location.pathname.startsWith('/workspace/');
+  
+  // Get tools with project-specific paths if in project workspace
+  const navigationTools = useMemo(() => {
+    if (isProjectWorkspace && projectId) {
+      const projectTools = tools.map(tool => ({
+        ...tool,
+        path: `/workspace/${projectId}${tool.path}`
+      }));
+      console.log('🔧 SharedLayout: Using project-specific tool paths:', {
+        projectId,
+        originalPaths: tools.map(t => t.path),
+        projectPaths: projectTools.map(t => t.path)
+      });
+      return projectTools;
+    }
+    console.log('🔧 SharedLayout: Using standard tool paths');
+    return tools;
+  }, [isProjectWorkspace, projectId]);
 
   const getCurrentTool = () => {
     const currentPath = location.pathname;
-    const tool = tools.find(t => t.path === currentPath);
-    return tool?.name || "Pandaura AS";
+    // First try to find exact match in navigationTools (which includes project-specific paths)
+    const exactMatch = navigationTools.find(t => t.path === currentPath);
+    if (exactMatch) return exactMatch.name;
+    
+    // If no exact match, try to find by tool name in the path
+    const toolMatch = tools.find(t => currentPath.includes(t.path.substring(1))); // Remove leading slash
+    return toolMatch?.name || "Pandaura AS";
   };
 
   const handleToolClick = useCallback((toolPath: string) => {
+    console.log('🔧 SharedLayout: Navigating to tool:', {
+      toolPath,
+      currentPath: location.pathname,
+      projectId,
+      isProjectWorkspace
+    });
     navigate(toolPath);
-  }, [navigate]);
+  }, [navigate, location.pathname, projectId, isProjectWorkspace]);
 
   const handleLogoClick = useCallback(() => {
     setShowSaveModal(true);
@@ -142,7 +175,7 @@ export default function SharedLayout({ children }: SharedLayoutProps) {
       >
         <Menu className="w-8 h-8" />
       </button>
-      {tools.map((tool) => {
+      {navigationTools.map((tool) => {
         const Icon = tool.icon;
         const isActive = getCurrentTool() === tool.name;
         return (

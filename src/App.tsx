@@ -6,7 +6,7 @@ import ProtectedRoute from "./components/ProtectedRoute";
 import AskPandaura from "./pages/AskPandaura";
 import LogicStudio from "./pages/LogicStudio";
 import AutoDocs from "./pages/AutoDocs";
-import TagDatabaseManager from "./pages/TagDatabaseManager";
+import TagDatabaseManager from "./components/tags/TagDatabaseManagerNew";
 // import Projects from "./pages/Projects";
 import Profile from "./pages/Profile";
 import SignIn from "./pages/SignIn";
@@ -47,6 +47,7 @@ export default function App() {
         
         {/* Debug Routes (Development Only) */}
         <Route path="/debug/projects" element={<ProtectedRoute><ProjectsDebug /></ProtectedRoute>} />
+        {/* <Route path="/debug/auth" element={<AuthDebugPage />} /> */}
         
         {/* Full Project Workflow - Persistent Sessions */}
         <Route path="/app" element={<Navigate to="/pandaura-as" replace />} />
@@ -54,8 +55,16 @@ export default function App() {
         <Route path="/logic-studio" element={<ProtectedRoute><SharedLayout><LogicStudio /></SharedLayout></ProtectedRoute>} />
         <Route path="/autodocs" element={<ProtectedRoute><SharedLayout><AutoDocs /></SharedLayout></ProtectedRoute>} />
         <Route path="/tag-database" element={<ProtectedRoute><SharedLayout><TagDatabaseManager /></SharedLayout></ProtectedRoute>} />
+        <Route path="/tag-database/:projectId" element={<ProtectedRoute><SharedLayout><TagDatabaseManager /></SharedLayout></ProtectedRoute>} />
         {/* <Route path="/projects" element={<ProtectedRoute><SharedLayout><Projects /></SharedLayout></ProtectedRoute>} /> */}
         <Route path="/case-studies" element={<ProtectedRoute><SharedLayout><CaseStudies /></SharedLayout></ProtectedRoute>} />
+        
+        {/* Project Workspace - All tools with project context */}
+        <Route path="/workspace/:projectId/pandaura-as" element={<ProtectedRoute><SharedLayout><AskPandaura /></SharedLayout></ProtectedRoute>} />
+        <Route path="/workspace/:projectId/logic-studio" element={<ProtectedRoute><SharedLayout><LogicStudio /></SharedLayout></ProtectedRoute>} />
+        <Route path="/workspace/:projectId/autodocs" element={<ProtectedRoute><SharedLayout><AutoDocs /></SharedLayout></ProtectedRoute>} />
+        <Route path="/workspace/:projectId/tag-database" element={<ProtectedRoute><SharedLayout><TagDatabaseManager /></SharedLayout></ProtectedRoute>} />
+        <Route path="/workspace/:projectId/case-studies" element={<ProtectedRoute><SharedLayout><CaseStudies /></SharedLayout></ProtectedRoute>} />
         
         {/* Quick Tools - One-time Sessions */}
         <Route path="/tool/logic" element={<SessionLayout><LogicStudio sessionMode={true} /></SessionLayout>} />
