@@ -1,11 +1,13 @@
 import React, { useState, useEffect, useRef } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import {  ChevronDown, Bot, Edit, Trash2, Plus, Check, X, RefreshCw, AlertTriangle } from "lucide-react";
+import {  ChevronDown, Bot, Edit, Trash2, Plus, Check, X, RefreshCw, AlertTriangle, Upload, Download } from "lucide-react";
 
 import { TagsProvider, useTags } from "./context";
 import { TagsAPI, Tag, CreateTagData } from "./api";
 import { ProjectsAPI, Project } from "../projects/api";
 import CreateTagModal from "./CreateTagModal";
+import VendorExportModal from "./VendorExportModal";
+import VendorImportModal from "./VendorImportModal";
 import { useToast } from "../ui/Toast";
 import Modal from "../ui/Modal";
 import Button from "../ui/Button";
@@ -46,6 +48,9 @@ const TagDatabaseManagerContent: React.FC<TagDatabaseManagerProps> = ({ sessionM
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [tagToDelete, setTagToDelete] = useState<Tag | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [showVendorExportModal, setShowVendorExportModal] = useState(false);
+  const [showVendorImportModal, setShowVendorImportModal] = useState(false);
+  const [currentProject, setCurrentProject] = useState<Project | null>(null);
   
   const vendorDropdownRef = useRef<HTMLDivElement>(null);
 
@@ -107,9 +112,23 @@ const TagDatabaseManagerContent: React.FC<TagDatabaseManagerProps> = ({ sessionM
     }
   };
 
+  // Load current project details
+  const loadCurrentProject = async (projectId: number) => {
+    try {
+      const projects = await ProjectsAPI.getProjects();
+      const project = projects.find(p => p.id === projectId);
+      if (project) {
+        setCurrentProject(project);
+      }
+    } catch (error) {
+      console.error('Failed to load current project:', error);
+    }
+  };
+
   // Handle project selection
   const handleProjectSelect = (project: Project) => {
     setCurrentProjectId(project.id);
+    setCurrentProject(project);
     localStorage.setItem('currentProjectId', project.id.toString());
     setFilters({ projectId: project.id });
     
@@ -123,6 +142,10 @@ const TagDatabaseManagerContent: React.FC<TagDatabaseManagerProps> = ({ sessionM
   useEffect(() => {
     if (currentProjectId) {
       fetchTags({ projectId: currentProjectId });
+      // Also load project details if we don't have them
+      if (!currentProject) {
+        loadCurrentProject(currentProjectId);
+      }
     }
   }, [currentProjectId]); // Remove fetchTags from dependencies to prevent infinite loop
 
@@ -247,9 +270,49 @@ const TagDatabaseManagerContent: React.FC<TagDatabaseManagerProps> = ({ sessionM
     }
   };
 
+  const handleExportButtonClick = () => {
+    if (!currentProjectId) {
+      showToast({
+        variant: 'error',
+        message: 'Please select a project first'
+      });
+      return;
+    }
+
+    setShowVendorExportModal(true);
+    setShowVendorDropdown(false);
+  };
+
+  const handleImportButtonClick = () => {
+    if (!currentProjectId) {
+      showToast({
+        variant: 'error',
+        title: 'No Project Selected',
+        message: 'Please select a project first before importing tags.',
+        duration: 3000
+      });
+      return;
+    }
+    setShowVendorImportModal(true);
+  };
+
+  const handleImportSuccess = (importedCount: number) => {
+    showToast({
+      variant: 'success',
+      title: 'Import Successful',
+      message: `Successfully imported ${importedCount} tags.`,
+      duration: 5000
+    });
+    // Refresh the tags list to show newly imported tags
+    refreshTags();
+  };
+
   const handleExport = async (format: string) => {
     if (!currentProjectId) {
-      alert('Please select a project first');
+      showToast({
+        variant: 'error',
+        message: 'Please select a project first'
+      });
       return;
     }
 
@@ -259,11 +322,17 @@ const TagDatabaseManagerContent: React.FC<TagDatabaseManagerProps> = ({ sessionM
         format
       });
       
-      alert(result.message);
+      showToast({
+        variant: 'success',
+        message: result.message
+      });
       setShowVendorDropdown(false);
     } catch (error) {
       console.error('Error exporting tags:', error);
-      alert('Failed to export tags: ' + (error instanceof Error ? error.message : 'Unknown error'));
+      showToast({
+        variant: 'error',
+        message: 'Failed to export tags: ' + (error instanceof Error ? error.message : 'Unknown error')
+      });
     }
   };
 
@@ -378,40 +447,37 @@ const TagDatabaseManagerContent: React.FC<TagDatabaseManagerProps> = ({ sessionM
             </button>
           )}
           
+          <button
+            onClick={handleImportButtonClick}
+            disabled={loading || !currentProjectId}
+            className="bg-primary text-white px-4 py-2 rounded-md flex items-center gap-2 text-sm hover:bg-primary transition-colors cursor-pointer disabled:opacity-50"
+            title="Import Beckhoff tags from CSV or XML files"
+          >
+            <Upload className="w-4 h-4" />
+            Import Tags
+          </button>
+          
           <button 
             onClick={() => handleExport('excel')}
-            disabled={loading}
+            disabled={loading || !currentProjectId}
             className="bg-primary text-white px-4 py-2 rounded-md text-sm hover:bg-secondary transition-colors cursor-pointer disabled:opacity-50"
           >
             Export to Excel (.xlsx)
           </button>
           
-          <div className="relative" ref={vendorDropdownRef}>
-            <button
-              onClick={() => setShowVendorDropdown(!showVendorDropdown)}
-              disabled={loading}
-              className="bg-white border border-light px-4 py-2 rounded-md flex items-center gap-2 text-sm hover:bg-accent-light transition-colors cursor-pointer disabled:opacity-50"
-            >
-              Export to Vendor Format <ChevronDown className="w-4 h-4" />
-            </button>
-            {showVendorDropdown && (
-              <div className="absolute right-0 mt-2 bg-white border border-light rounded-md shadow-md w-56 z-50">
-                {["Rockwell CSV", "TIA XML", "Beckhoff XLS"].map((item) => (
-                  <div
-                    key={item}
-                    onClick={() => handleExport(item.toLowerCase())}
-                    className="px-4 py-2 text-sm hover:bg-gray-100 cursor-pointer transition"
-                  >
-                    {item}
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
+          <button
+            onClick={handleExportButtonClick}
+            disabled={loading || !currentProjectId || tags.length === 0}
+            className="bg-primary border border-light px-4 py-2 rounded-md flex items-center gap-2 text-sm hover:bg-primary transition-colors cursor-pointer disabled:opacity-50 text-white hover:text-white"
+            title={tags.length === 0 ? "No tags to export. Please add tags first." : "Export tags in vendor-specific formats"}
+          >
+            <Download className="w-4 h-4" />
+            Export your tags
+          </button>
 
           <button
             onClick={handleAutoGenerate}
-            disabled={loading}
+            disabled={loading || !currentProjectId}
             className="bg-white border border-light px-4 py-2 rounded-md text-sm hover:bg-accent-light transition-colors cursor-pointer flex items-center gap-2 disabled:opacity-50"
           >
             <Bot className="w-4 h-4" />
@@ -795,6 +861,28 @@ const TagDatabaseManagerContent: React.FC<TagDatabaseManagerProps> = ({ sessionM
           onSuccess={() => setShowCreateTagModal(false)}
           projectId={currentProjectId}
           onCreate={handleCreateTag}
+        />
+      )}
+
+      {/* Vendor Export Modal */}
+      {currentProjectId && currentProject && (
+        <VendorExportModal
+          isOpen={showVendorExportModal}
+          onClose={() => setShowVendorExportModal(false)}
+          projectId={currentProjectId}
+          projectName={currentProject.project_name}
+          tags={tags}
+        />
+      )}
+
+      {/* Vendor Import Modal */}
+      {currentProjectId && currentProject && (
+        <VendorImportModal
+          isOpen={showVendorImportModal}
+          onClose={() => setShowVendorImportModal(false)}
+          projectId={currentProjectId}
+          projectName={currentProject.project_name}
+          onSuccess={handleImportSuccess}
         />
       )}
       </>

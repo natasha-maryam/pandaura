@@ -1,7 +1,11 @@
 // API client for tags endpoints
-import { config } from '../../config/environment';
+import { config, debugConfig } from '../../config/environment';
+
+// Debug the API configuration on load
+debugConfig();
 
 const API_BASE_URL = `${config.apiBaseUrl}/api/v1`;
+console.log('🔗 TagsAPI initialized with base URL:', API_BASE_URL);
 
 export interface Tag {
   id: string;
@@ -239,6 +243,265 @@ export class TagsAPI {
     if (!response.ok) {
       const error = await response.json().catch(() => ({ error: 'Network error' }));
       throw new Error(error.error || 'Failed to export tags');
+    }
+
+    return response.json();
+  }
+
+  // Export tags in vendor-specific format
+  static async exportVendorTags(
+    projectId: number,
+    vendor: 'rockwell' | 'siemens' | 'beckhoff',
+    format: 'csv' | 'xlsx' | 'xml' | 'json' | 'l5x' = 'json'
+  ): Promise<Blob> {
+    // Use specific vendor endpoints that exist in backend
+    let endpoint: string;
+    
+    if (vendor === 'beckhoff') {
+      // Use Beckhoff-specific endpoints
+      if (format === 'csv' || format === 'xlsx') {
+        endpoint = `${API_BASE_URL}/tags/projects/${projectId}/export/beckhoff/csv`;
+      } else if (format === 'xml') {
+        endpoint = `${API_BASE_URL}/tags/projects/${projectId}/export/beckhoff/xml`;
+      } else {
+        // Default to CSV for other formats until xlsx is implemented
+        endpoint = `${API_BASE_URL}/tags/projects/${projectId}/export/beckhoff/csv`;
+      }
+    } else {
+      // For other vendors, use the formatted endpoint (may need implementation)
+      endpoint = `${API_BASE_URL}/tags/projects/${projectId}/export/${vendor}/formatted`;
+    }
+
+    const response = await fetch(endpoint, {
+      method: 'GET',
+      headers: getAuthHeaders(),
+    });
+
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({ error: 'Network error' }));
+      throw new Error(error.error || 'Failed to export vendor-specific tags');
+    }
+
+    return response.blob();
+  }
+
+  // Beckhoff-specific export functions
+  static async exportBeckhoffCsv(projectId: number): Promise<Blob> {
+    const response = await fetch(`${API_BASE_URL}/tags/projects/${projectId}/export/beckhoff/csv`, {
+      method: 'GET',
+      headers: getAuthHeaders(),
+    });
+
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({ error: 'Network error' }));
+      throw new Error(error.error || 'Failed to export Beckhoff CSV');
+    }
+
+    return response.blob();
+  }
+
+  static async exportBeckhoffXml(projectId: number): Promise<Blob> {
+    const response = await fetch(`${API_BASE_URL}/tags/projects/${projectId}/export/beckhoff/xml`, {
+      method: 'GET',
+      headers: getAuthHeaders(),
+    });
+
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({ error: 'Network error' }));
+      throw new Error(error.error || 'Failed to export Beckhoff XML');
+    }
+
+    return response.blob();
+  }
+
+  // Rockwell-specific export functions
+  static async exportRockwellCsv(projectId: number): Promise<Blob> {
+    const response = await fetch(`${API_BASE_URL}/tags/projects/${projectId}/export/rockwell/csv`, {
+      method: 'GET',
+      headers: getAuthHeaders(),
+    });
+
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({ error: 'Network error' }));
+      throw new Error(error.error || 'Failed to export Rockwell CSV');
+    }
+
+    return response.blob();
+  }
+
+  static async exportRockwellL5X(projectId: number): Promise<Blob> {
+    const response = await fetch(`${API_BASE_URL}/tags/projects/${projectId}/export/rockwell/l5x`, {
+      method: 'GET',
+      headers: getAuthHeaders(),
+    });
+
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({ error: 'Network error' }));
+      throw new Error(error.error || 'Failed to export Rockwell L5X');
+    }
+
+    return response.blob();
+  }
+
+  static async importBeckhoffCsv(projectId: number, file: File): Promise<{
+    success: boolean;
+    inserted?: number;
+    errors?: Array<{ row: number; errors: string[]; raw: any }>;
+    processed?: number;
+  }> {
+    const formData = new FormData();
+    formData.append('file', file);
+
+    const response = await fetch(`${API_BASE_URL}/tags/projects/${projectId}/import/beckhoff/csv`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${localStorage.getItem('authToken')}`,
+      },
+      body: formData,
+    });
+
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({ error: 'Network error' }));
+      throw new Error(error.error || 'Failed to import Beckhoff CSV');
+    }
+
+    return response.json();
+  }
+
+  static async importBeckhoffXml(projectId: number, file: File): Promise<{
+    success: boolean;
+    inserted?: number;
+    errors?: Array<{ row: number; errors: string[]; raw: any }>;
+    processed?: number;
+  }> {
+    const formData = new FormData();
+    formData.append('file', file);
+
+    const response = await fetch(`${API_BASE_URL}/tags/projects/${projectId}/import/beckhoff/xml`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${localStorage.getItem('authToken')}`,
+      },
+      body: formData,
+    });
+
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({ error: 'Network error' }));
+      throw new Error(error.error || 'Failed to import Beckhoff XML');
+    }
+
+    return response.json();
+  }
+
+  // Rockwell import methods
+  static async importRockwellCsv(projectId: number, file: File): Promise<{
+    success: boolean;
+    inserted?: number;
+    errors?: Array<{ row: number; errors: string[]; raw: any }>;
+    processed?: number;
+  }> {
+    const formData = new FormData();
+    formData.append('file', file);
+
+    const response = await fetch(`${API_BASE_URL}/tags/projects/${projectId}/import/rockwell/csv`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${localStorage.getItem('authToken')}`,
+      },
+      body: formData,
+    });
+
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({ error: 'Network error' }));
+      throw new Error(error.error || 'Failed to import Rockwell CSV');
+    }
+
+    return response.json();
+  }
+
+  static async importRockwellL5X(projectId: number, file: File): Promise<{
+    success: boolean;
+    inserted?: number;
+    errors?: Array<{ row: number; errors: string[]; raw: any }>;
+    processed?: number;
+  }> {
+    const formData = new FormData();
+    formData.append('file', file);
+
+    const response = await fetch(`${API_BASE_URL}/tags/projects/${projectId}/import/rockwell/l5x`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${localStorage.getItem('authToken')}`,
+      },
+      body: formData,
+    });
+
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({ error: 'Network error' }));
+      throw new Error(error.error || 'Failed to import Rockwell L5X');
+    }
+
+    return response.json();
+  }
+
+  // Format tags for specific vendor
+  static async formatTagsForVendor(
+    projectId: number,
+    vendor: 'rockwell' | 'siemens' | 'beckhoff',
+    tags: Tag[]
+  ): Promise<{
+    success: boolean;
+    data: {
+      vendor: string;
+      originalCount: number;
+      formattedCount: number;
+      tags: any[];
+    };
+  }> {
+    const response = await fetch(`${API_BASE_URL}/tags/format/${vendor}`, {
+      method: 'POST',
+      headers: getAuthHeaders(),
+      body: JSON.stringify({
+        projectId,
+        tags
+      }),
+    });
+
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({ error: 'Network error' }));
+      throw new Error(error.error || 'Failed to format tags for vendor');
+    }
+
+    return response.json();
+  }
+
+  // Validate addresses for specific vendor
+  static async validateAddressesForVendor(
+    vendor: 'rockwell' | 'siemens' | 'beckhoff',
+    addresses: string[]
+  ): Promise<{
+    success: boolean;
+    data: {
+      vendor: string;
+      totalAddresses: number;
+      validAddresses: number;
+      invalidAddresses: number;
+      results: Array<{
+        address: string;
+        isValid: boolean;
+        vendor: string;
+      }>;
+    };
+  }> {
+    const response = await fetch(`${API_BASE_URL}/tags/validate-addresses/${vendor}`, {
+      method: 'POST',
+      headers: getAuthHeaders(),
+      body: JSON.stringify({ addresses }),
+    });
+
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({ error: 'Network error' }));
+      throw new Error(error.error || 'Failed to validate addresses');
     }
 
     return response.json();

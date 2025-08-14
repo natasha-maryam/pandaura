@@ -2,25 +2,35 @@
 const isDevelopment = import.meta.env.DEV || import.meta.env.VITE_DEPLOYMENT_MODE === 'development';
 const isProduction = import.meta.env.PROD || import.meta.env.VITE_DEPLOYMENT_MODE === 'production';
 
+// Debug environment detection
+console.log('🔍 Environment Detection:', {
+  'import.meta.env.DEV': import.meta.env.DEV,
+  'import.meta.env.PROD': import.meta.env.PROD,
+  'import.meta.env.MODE': import.meta.env.MODE,
+  'VITE_DEPLOYMENT_MODE': import.meta.env.VITE_DEPLOYMENT_MODE,
+  isDevelopment,
+  isProduction
+});
+
 // Determine the API base URL based on environment
 const getApiBaseUrl = () => {
   // If explicitly set via environment variable, use that
   if (import.meta.env.VITE_API_BASE_URL) {
-    console.log('Using explicit API URL:', import.meta.env.VITE_API_BASE_URL);
+    console.log('✅ Using explicit API URL:', import.meta.env.VITE_API_BASE_URL);
     return import.meta.env.VITE_API_BASE_URL;
   }
   
   // Auto-detect based on environment
   if (isDevelopment) {
-    console.log('Environment: Development - Using localhost');
+    console.log('🔧 Environment: Development - Using localhost:5000');
     return 'http://localhost:5000';
   } else if (isProduction) {
-    console.log('Environment: Production - Using Railway backend');
+    console.log('🚀 Environment: Production - Using Railway backend');
     return 'https://pandaura-backend-production.up.railway.app';
   }
   
   // Fallback to localhost for on-premise or unknown environments
-  console.log('Environment: Unknown - Falling back to localhost');
+  console.log('⚠️ Environment: Unknown - Falling back to localhost:5000');
   return 'http://localhost:5000';
 };
 
@@ -78,23 +88,17 @@ export const getHostInfo = () => {
   };
 };
 
-// Debug function to show current configuration
+// Debug function to check environment configuration
 export const debugConfig = () => {
-  console.log('=== Pandaura Frontend Configuration ===');
-  console.log('Environment Variables:', {
-    DEV: import.meta.env.DEV,
-    PROD: import.meta.env.PROD,
-    MODE: import.meta.env.MODE,
-    VITE_DEPLOYMENT_MODE: import.meta.env.VITE_DEPLOYMENT_MODE,
-    VITE_API_BASE_URL: import.meta.env.VITE_API_BASE_URL
+  console.log('🔍 Environment Debug:', {
+    'isDevelopment': isDevelopment,
+    'isProduction': isProduction,
+    'import.meta.env.DEV': import.meta.env.DEV,
+    'import.meta.env.PROD': import.meta.env.PROD,
+    'import.meta.env.MODE': import.meta.env.MODE,
+    'VITE_API_BASE_URL': import.meta.env.VITE_API_BASE_URL,
+    'Final API URL': config.apiBaseUrl
   });
-  console.log('Computed Config:', {
-    apiBaseUrl: config.apiBaseUrl,
-    deploymentMode: config.deploymentMode,
-    appTitle: config.appTitle
-  });
-  console.log('Host Info:', getHostInfo());
-  console.log('=======================================');
 };
 
 // Check if we're running in offline mode
