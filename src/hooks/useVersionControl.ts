@@ -59,8 +59,8 @@ export function useVersionControl({
       // Update last version time
       if (versionHistory.length > 0) {
         const latestVersion = versionHistory[0];
-        setLastVersionTime(new Date(latestVersion.timestamp * 1000));
-        console.log('useVersionControl: Latest version time set:', latestVersion.timestamp);
+        setLastVersionTime(new Date(latestVersion.snapshot_info.timestamp * 1000));
+        console.log('useVersionControl: Latest version time set:', latestVersion.snapshot_info.timestamp);
       }
     } catch (err: any) {
       const errorMessage = err.message || 'Failed to load version history';
