@@ -15,6 +15,7 @@ interface UseVersionControlReturn {
   // Version operations
   createVersion: (message?: string, state?: any) => Promise<number>;
   rollbackToVersion: (versionNumber: number) => Promise<void>;
+  deleteVersion: (versionNumber: number) => Promise<void>;
   getVersionData: (versionNumber: number) => Promise<any>;
   refreshVersions: () => Promise<void>;
   
@@ -193,12 +194,40 @@ export function useVersionControl({
     }
   }, [projectId, refreshVersions]);
 
+  // Delete a version
+  const deleteVersion = useCallback(async (versionNumber: number): Promise<void> => {
+    if (!projectId) throw new Error('No project ID provided');
+    
+    try {
+      setError(null);
+      
+      await ProjectsAPI.deleteVersion(projectId, versionNumber);
+      
+      // Refresh version history after deletion
+      await refreshVersions();
+      
+      // Emit event for version deletion
+      window.dispatchEvent(new CustomEvent('pandaura:version-deleted', {
+        detail: { 
+          projectId, 
+          versionNumber,
+          timestamp: Date.now()
+        }
+      }));
+      
+    } catch (err: any) {
+      setError(err.message || 'Failed to delete version');
+      throw err;
+    }
+  }, [projectId, refreshVersions]);
+
   return {
     versions,
     isLoading,
     error,
     createVersion,
     rollbackToVersion,
+    deleteVersion,
     getVersionData,
     refreshVersions,
     triggerAutoVersion,

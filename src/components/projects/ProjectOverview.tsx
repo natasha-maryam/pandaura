@@ -48,12 +48,13 @@ function ProjectOverviewContent({ project, onBack, onOpenWorkspace }: ProjectOve
     markDirty
   } = useProject(project?.id || 0); // Use 0 as fallback to ensure hook is always called
 
-  const {
+const {
     versions: realVersions,
-    isLoading: versionsLoading,
-    error: versionsError,
-    rollbackToVersion,
-    refreshVersions
+  isLoading: versionsLoading,
+  error: versionsError,
+  rollbackToVersion,
+    deleteVersion,
+  refreshVersions
   } = useVersionControl({ 
     projectId: project?.id || 0, // Use 0 as fallback to ensure hook is always called
     autoCreateVersions: true 
@@ -124,6 +125,19 @@ function ProjectOverviewContent({ project, onBack, onOpenWorkspace }: ProjectOve
       console.error(errorMessage);
     }
   }, [rollbackToVersion]);
+
+  const handleDelete = useCallback(async (version: ProjectVersion) => {
+    if (!deleteVersion) return; // Guard clause but hook is still called
+    try {
+      console.log('Deleting version:', version.version_number);
+      await deleteVersion(version.version_number);
+      console.log('Version deleted successfully');
+    } catch (error) {
+      console.error('Delete failed:', error);
+      const errorMessage = error instanceof Error ? error.message : 'Failed to delete version. Please try again.';
+      console.error(errorMessage);
+    }
+  }, [deleteVersion]);
 
   // Effect hooks - always called
   useEffect(() => {
@@ -374,6 +388,7 @@ function ProjectOverviewContent({ project, onBack, onOpenWorkspace }: ProjectOve
             projectId={project.id}
             onViewDiff={handleViewDiff}
             onRollback={handleRollback}
+            onDelete={handleDelete}
             onRefresh={refreshVersions}
           />
 

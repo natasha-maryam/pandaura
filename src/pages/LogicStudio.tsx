@@ -12,6 +12,7 @@ import { useTagSyncOnly, useProjectSync } from "../contexts/ProjectSyncContext";
 import { useProjectAutosave } from "../components/projects/hooks";
 import { useProjectNavigationProtection } from "../hooks/useNavigationProtection";
 import { useVersionControl } from "../hooks/useVersionControl";
+import { ProjectsAPI } from "../components/projects/api";
 import AutosaveStatus from "../components/ui/AutosaveStatus";
 import VersionControlToolbar from "../components/ui/VersionControlToolbar";
 import VersionControlDebug from "../components/debug/VersionControlDebug";

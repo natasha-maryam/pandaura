@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { History, ChevronDown, ChevronUp, Eye, RotateCcw, Clock, RefreshCw, AlertCircle } from 'lucide-react';
+import { History, ChevronDown, ChevronUp, Eye, RotateCcw, Clock, RefreshCw, AlertCircle, Trash2 } from 'lucide-react';
 import { Button, Card } from '../ui';
 import { ProjectVersion } from '../projects/api';
 import VersionDiffViewer from '../ui/VersionDiffViewer';
@@ -10,6 +10,7 @@ interface VersionHistoryProps {
   error?: string | null;
   onViewDiff?: (version: ProjectVersion) => void;
   onRollback: (version: ProjectVersion) => void;
+  onDelete?: (version: ProjectVersion) => void;
   onRefresh?: () => void;
   projectId?: number;
 }
@@ -20,6 +21,7 @@ export default function VersionHistory({
   error = null,
   onViewDiff,
   onRollback,
+  onDelete,
   onRefresh,
   projectId
 }: VersionHistoryProps) {
@@ -197,16 +199,34 @@ export default function VersionHistory({
                         )}
 
                         {!isLatest && (
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            icon={RotateCcw}
-                            onClick={() => onRollback(version)}
-                            className="text-orange-600 hover:text-orange-700 hover:bg-orange-50"
-                            title="Rollback to this version"
-                          >
-                            Rollback
-                          </Button>
+                          <>
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              icon={RotateCcw}
+                              onClick={() => onRollback(version)}
+                              className="text-orange-600 hover:text-orange-700 hover:bg-orange-50"
+                              title="Rollback to this version"
+                            >
+                              Rollback
+                            </Button>
+                            {onDelete && (
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                icon={Trash2}
+                                onClick={() => {
+                                  if (window.confirm(`Are you sure you want to delete version ${version.version_number}? This action cannot be undone.`)) {
+                                    onDelete(version);
+                                  }
+                                }}
+                                className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                                title="Delete this version"
+                              >
+                                Delete
+                              </Button>
+                            )}
+                          </>
                         )}
                       </div>
                     </div>

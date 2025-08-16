@@ -287,7 +287,7 @@ export class ProjectsAPI {
    */
   static async getVersionHistory(projectId: number): Promise<ProjectVersion[]> {
     try {
-      const response = await api.get<{ success: boolean; versions: ProjectVersion[] }>(`/versions/projects/${projectId}/versions`);
+      const response = await api.get<{ success: boolean; versions: ProjectVersion[] }>(`/projects/${projectId}/versions`);
       return response.data.versions || [];
     } catch (error: any) {
       if (error.response?.data?.error) {
@@ -302,7 +302,7 @@ export class ProjectsAPI {
    */
   static async createVersion(projectId: number, data: CreateVersionData): Promise<number> {
     try {
-      const response = await api.post<{ success: boolean; versionId: number }>(`/versions/projects/${projectId}/versions`, data);
+      const response = await api.post<{ success: boolean; versionId: number }>(`/projects/${projectId}/create-version`, data);
 
       if (!response.data.success) {
         throw new Error('Failed to create version');
@@ -372,7 +372,7 @@ export class ProjectsAPI {
    */
   static async createVersionSnapshot(projectId: number, message?: string, isAuto: boolean = false): Promise<number> {
     try {
-      const response = await api.post<{ success: boolean; version: number }>(`/versions/projects/${projectId}/version`, {
+      const response = await api.post<{ success: boolean; version: number }>(`/projects/${projectId}/version`, {
         message,
         isAuto
       });
@@ -415,7 +415,7 @@ export class ProjectsAPI {
    */
   static async createAutoSaveVersion(projectId: number, state: any): Promise<void> {
     try {
-      const response = await api.post<{ success: boolean }>(`/versions/projects/${projectId}/auto-save`, { state });
+      const response = await api.post<{ success: boolean }>(`/projects/${projectId}/auto-save`, { state });
 
       if (!response.data.success) {
         throw new Error('Auto-save version creation failed');
@@ -431,11 +431,29 @@ export class ProjectsAPI {
    */
   static async getLatestAutoSave(projectId: number): Promise<any | null> {
     try {
-      const response = await api.get<{ state: any; timestamp: number } | null>(`/versions/projects/${projectId}/auto-save`);
+      const response = await api.get<{ state: any; timestamp: number } | null>(`/projects/${projectId}/auto-save`);
       return response.data;
     } catch (error: any) {
       console.error('Failed to get latest auto-save:', error.response?.data?.error || error.message);
       return null;
+    }
+  }
+
+  /**
+   * Delete a specific version
+   */
+  static async deleteVersion(projectId: number, versionNumber: number): Promise<void> {
+    try {
+      const response = await api.delete<{ success: boolean }>(`/projects/${projectId}/version/${versionNumber}`);
+
+      if (!response.data.success) {
+        throw new Error('Failed to delete version');
+      }
+    } catch (error: any) {
+      if (error.response?.data?.error) {
+        throw new Error(error.response.data.error);
+      }
+      throw error;
     }
   }
 }

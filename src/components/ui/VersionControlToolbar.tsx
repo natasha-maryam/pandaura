@@ -232,7 +232,7 @@ export default function VersionControlToolbar({
                           </span>
                         </div>
                         <p className="text-sm text-gray-600 mb-1">
-                          {new Date(version.timestamp * 1000).toLocaleString()}
+                          {new Date(version.snapshot_info.timestamp * 1000).toLocaleString()}
                         </p>
                         {version.message && (
                           <p className="text-sm text-gray-800">{version.message}</p>

@@ -97,7 +97,9 @@ export class TagSyncTester {
         }
       };
 
-      this.ws.addEventListener('message', messageHandler);
+      if (this.ws) {
+        this.ws.addEventListener('message', messageHandler);
+      }
       
       // If we get here without auth errors, authentication passed
       setTimeout(() => {
@@ -140,13 +142,17 @@ export class TagSyncTester {
         }
       };
 
-      this.ws.addEventListener('message', messageHandler);
+      if (this.ws) {
+        this.ws.addEventListener('message', messageHandler);
+      }
       
       // Send subscription message
-      this.ws.send(JSON.stringify({
+      if (this.ws) {
+        this.ws.send(JSON.stringify({
         type: 'subscribe',
         projectId: this.projectId
       }));
+      }
     });
   }
 
@@ -196,7 +202,9 @@ export class TagSyncTester {
         }
       };
 
-      this.ws.addEventListener('message', messageHandler);
+      if (this.ws) {
+        this.ws.addEventListener('message', messageHandler);
+      }
       
       // Send test ST code
       const testSTCode = `
@@ -212,13 +220,15 @@ PROGRAM TestProgram
 END_PROGRAM
       `;
 
-      this.ws.send(JSON.stringify({
+      if (this.ws) {
+        this.ws.send(JSON.stringify({
         type: 'sync_tags',
         projectId: this.projectId,
         vendor: 'rockwell',
         stCode: testSTCode,
         debounceMs: 100 // Faster for testing
       }));
+      }
     });
   }
 
@@ -248,10 +258,13 @@ END_PROGRAM
         }
       };
 
-      this.ws.addEventListener('message', messageHandler);
+      if (this.ws) {
+        this.ws.addEventListener('message', messageHandler);
+      }
       
       // Send ping
-      this.ws.send(JSON.stringify({ type: 'ping' }));
+      if (this.ws) {
+        this.ws.send(JSON.stringify({ type: 'ping' }));
     });
   }
 
