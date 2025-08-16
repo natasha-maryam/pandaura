@@ -257,7 +257,7 @@ END_PROGRAM`);
       const customEvent = event as CustomEvent;
       const { projectId: rolledProjectId, targetVersion, rolledBackTo } = customEvent.detail;
 
-      if (rolledProjectId === projectId) {
+      if (rolledProjectId === projectId && projectId) {
         console.log('Logic Studio: Handling enhanced rollback to version', rolledBackTo);
 
         try {
