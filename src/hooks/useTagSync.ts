@@ -111,8 +111,10 @@ export function useTagSync(options: UseTagSyncOptions = {}): UseTagSyncReturn {
   // Handle WebSocket messages
   const handleMessage = useCallback((event: MessageEvent) => {
     try {
+      console.log('📨 Received WebSocket message:', event.data);
       const response: TagSyncResponse = JSON.parse(event.data);
-      
+      console.log('📨 Parsed message:', response);
+
       switch (response.type) {
         case 'tags_updated':
           setLastSyncTime(Date.now());
@@ -164,6 +166,7 @@ export function useTagSync(options: UseTagSyncOptions = {}): UseTagSyncReturn {
 
       console.log(`🔗 Connecting to WebSocket: ${url}`);
       console.log(`🌐 Browser origin: ${origin}`);
+      console.log(`🔗 Environment VITE_WS_BASE_URL: ${import.meta.env.VITE_WS_BASE_URL}`);
 
       // Create WebSocket (browser will automatically send Origin header)
       const ws = new WebSocket(url);
@@ -172,7 +175,9 @@ export function useTagSync(options: UseTagSyncOptions = {}): UseTagSyncReturn {
       wsRef.current = ws;
 
       ws.onopen = () => {
-        console.log('🔌 TagSync WebSocket connected');
+        console.log('🔌 TagSync WebSocket connected successfully!');
+        console.log('🔌 WebSocket readyState:', ws.readyState);
+        console.log('🔌 WebSocket URL:', ws.url);
         setIsConnected(true);
         setIsConnecting(false);
         setConnectionAttempts(0);
@@ -328,7 +333,7 @@ export function useTagSync(options: UseTagSyncOptions = {}): UseTagSyncReturn {
     return () => {
       disconnect();
     };
-  }, [autoConnect, connect, disconnect, isDisabled]);
+  }, [autoConnect, isDisabled]); // Removed connect/disconnect from deps to prevent reconnection loop
 
   // Periodic ping to keep connection alive
   useEffect(() => {

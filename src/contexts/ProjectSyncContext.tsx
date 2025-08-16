@@ -99,11 +99,18 @@ export function ProjectSyncProvider({ children }: ProjectSyncProviderProps) {
   // Connect/disconnect based on project ID
   useEffect(() => {
     if (currentProjectId) {
-      console.log(`🔄 Connecting to tag sync for project ID: ${currentProjectId}`);
-      tagSync.connect();
-      tagSync.subscribe(currentProjectId);
+      console.log(`🔄 ProjectSyncContext: Connecting to tag sync for project ID: ${currentProjectId}`);
+      console.log(`🔄 TagSync state: connected=${tagSync.isConnected}, connecting=${tagSync.isConnecting}`);
+
+      // Small delay to ensure the hook is ready
+      setTimeout(() => {
+        tagSync.connect();
+        setTimeout(() => {
+          tagSync.subscribe(currentProjectId);
+        }, 100);
+      }, 100);
     } else {
-      console.log('🔄 Disconnecting from tag sync (no project ID)');
+      console.log('🔄 ProjectSyncContext: Disconnecting from tag sync (no project ID)');
       tagSync.unsubscribe();
       tagSync.disconnect();
       setLatestTags([]);

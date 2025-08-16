@@ -8,7 +8,7 @@ import AutoFixTooltip from "../pages/STEditor/AutoFixTooltip";
 import RefactorSuggestionBanner from "../pages/STEditor/RefactorSuggestionBanner";
 import SmartEditToolbar from "../pages/STEditor/SmartEditToolbar";
 import { useModuleState } from "../contexts/ModuleStateContext";
-import { useTagSyncOnly } from "../contexts/ProjectSyncContext";
+import { useTagSyncOnly, useProjectSync } from "../contexts/ProjectSyncContext";
 
 import {
   UploadCloud,
@@ -40,6 +40,15 @@ export default function LogicStudio({ sessionMode = false }: LogicStudioProps) {
     syncTags,
     connectionAttempts
   } = useTagSyncOnly();
+
+  // Get full project sync context for debugging
+  const { currentProjectId, connect, disconnect } = useProjectSync();
+
+  // Debug connection state
+  useEffect(() => {
+    console.log(`🔍 LogicStudio: Connection state changed - connected: ${isConnected}, connecting: ${isConnecting}, error: ${lastError}`);
+    console.log(`🔍 LogicStudio: Project ID: ${currentProjectId}`);
+  }, [isConnected, isConnecting, lastError, currentProjectId]);
   
   // Get persisted state or use defaults
   const moduleState = getModuleState('LogicStudio');
@@ -238,6 +247,21 @@ END_PROGRAM`;
                 </div>
               )}
             </div>
+          )}
+
+          {/* Debug Connection Button */}
+          {!sessionMode && (
+            <button
+              onClick={() => {
+                console.log('🔧 Debug: Manual connection attempt');
+                console.log('🔧 Current state:', { isConnected, isConnecting, currentProjectId, lastError });
+                connect();
+              }}
+              className="px-2 py-1 bg-blue-500 text-white text-xs rounded hover:bg-blue-600"
+              title="Debug: Manual Connect"
+            >
+              Debug Connect
+            </button>
           )}
 
           {/* Collapse Button */}
