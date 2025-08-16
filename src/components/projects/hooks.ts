@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { Project, ApiProject, convertApiToDisplay } from './types';
 import { ProjectsAPI } from './api';
+import { useVersionControl } from '../../hooks/useVersionControl';
 
 export interface UseProjectsOptions {
   autoRefresh?: boolean;
@@ -204,6 +205,7 @@ export function useProject(projectId: number, autosaveInterval = 30000) {
 /**
  * Enhanced autosave hook with comprehensive state management
  * Follows the autosave integration guide requirements
+ * Now integrated with version control system
  */
 export function useProjectAutosave(projectId: number, initialState: any = {}) {
   const [projectState, setProjectState] = useState(initialState);
@@ -213,9 +215,17 @@ export function useProjectAutosave(projectId: number, initialState: any = {}) {
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
 
   const lastSavedStateRef = useRef<any>(null);
-  const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const saveTimeoutRef = useRef<number | null>(null);
   const retryCountRef = useRef(0);
   const maxRetries = 3;
+  const significantChangeCountRef = useRef(0);
+
+  // Version control integration
+  const { triggerAutoVersion, createVersion } = useVersionControl({
+    projectId,
+    autoCreateVersions: true,
+    versionInterval: 10 * 60 * 1000 // Create auto-versions every 10 minutes
+  });
 
   // Deep comparison function to detect changes
   const hasChanged = useCallback((current: any, last: any): boolean => {
@@ -242,6 +252,32 @@ export function useProjectAutosave(projectId: number, initialState: any = {}) {
       setLastSaved(new Date());
       setHasUnsavedChanges(false);
       retryCountRef.current = 0;
+
+      // Version control integration
+      if (isManualSave) {
+        // For manual saves, create a proper version with message
+        try {
+          await createVersion(`Manual save - ${new Date().toLocaleString()}`, state);
+          console.log('Manual version created successfully');
+        } catch (versionError) {
+          console.error('Failed to create manual version:', versionError);
+          // Don't fail the save if version creation fails
+        }
+      } else {
+        // For auto-saves, increment change counter and trigger auto-version if needed
+        significantChangeCountRef.current++;
+
+        // Create auto-version every 10 significant changes or based on time interval
+        if (significantChangeCountRef.current >= 10) {
+          try {
+            await triggerAutoVersion(state, `Auto-version after ${significantChangeCountRef.current} changes`);
+            significantChangeCountRef.current = 0; // Reset counter
+          } catch (versionError) {
+            console.error('Failed to create auto-version:', versionError);
+            // Don't fail the save if version creation fails
+          }
+        }
+      }
 
       return true;
     } catch (error: any) {
@@ -292,7 +328,7 @@ export function useProjectAutosave(projectId: number, initialState: any = {}) {
 
   // Update project state and trigger autosave
   const updateProjectState = useCallback((updates: Partial<any> | ((prev: any) => any)) => {
-    setProjectState(prev => {
+    setProjectState((prev: any) => {
       const newState = typeof updates === 'function' ? updates(prev) : { ...prev, ...updates };
 
       // Check if state actually changed
@@ -309,6 +345,27 @@ export function useProjectAutosave(projectId: number, initialState: any = {}) {
   const saveNow = useCallback(async (): Promise<boolean> => {
     return await performAutosave(projectState, true);
   }, [performAutosave, projectState]);
+
+  // Manual save with custom version message
+  const saveWithMessage = useCallback(async (message: string): Promise<boolean> => {
+    if (!projectId) return false;
+
+    try {
+      // First perform the autosave
+      const saveSuccess = await performAutosave(projectState, false);
+
+      if (saveSuccess) {
+        // Then create a version with the custom message
+        await createVersion(message, projectState);
+        console.log('Manual version created with message:', message);
+      }
+
+      return saveSuccess;
+    } catch (error) {
+      console.error('Failed to save with message:', error);
+      return false;
+    }
+  }, [projectId, performAutosave, projectState, createVersion]);
 
   // Load fallback state from localStorage
   const loadFallbackState = useCallback(() => {
@@ -362,6 +419,7 @@ export function useProjectAutosave(projectId: number, initialState: any = {}) {
     saveError,
     hasUnsavedChanges,
     saveNow,
+    saveWithMessage,
     loadFallbackState
   };
 }

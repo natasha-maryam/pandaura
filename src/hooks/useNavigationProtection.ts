@@ -24,12 +24,19 @@ export function useNavigationProtection({
     const handleBeforeUnload = (e: BeforeUnloadEvent) => {
       if (hasUnsavedChanges) {
         // Try to send a beacon for last-minute save
-        if (onSave && navigator.sendBeacon) {
+        if (onSave && 'sendBeacon' in navigator) {
           // Note: sendBeacon is limited and may not work for complex saves
-          // This is a best-effort attempt
-          console.log('Attempting beacon save before unload');
+          // This is a best-effort attempt - we can't await the save here
+          try {
+            // Create a simple beacon payload
+            const beaconData = JSON.stringify({ emergency_save: true, timestamp: Date.now() });
+            navigator.sendBeacon('/api/v1/emergency-save', beaconData);
+            console.log('Attempting beacon save before unload');
+          } catch (error) {
+            console.warn('Beacon save failed:', error);
+          }
         }
-        
+
         e.preventDefault();
         e.returnValue = message;
         return message;
