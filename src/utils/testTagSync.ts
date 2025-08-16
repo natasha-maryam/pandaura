@@ -265,6 +265,7 @@ END_PROGRAM
       // Send ping
       if (this.ws) {
         this.ws.send(JSON.stringify({ type: 'ping' }));
+      }
     });
   }
 
