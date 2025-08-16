@@ -9,6 +9,8 @@ import RefactorSuggestionBanner from "../pages/STEditor/RefactorSuggestionBanner
 import SmartEditToolbar from "../pages/STEditor/SmartEditToolbar";
 import { useModuleState } from "../contexts/ModuleStateContext";
 import { useTagSyncOnly, useProjectSync } from "../contexts/ProjectSyncContext";
+import { tagsToSTCodeWithScopes } from "../utils/tagToSTConverter";
+import { RefreshCw } from "lucide-react";
 
 import {
   UploadCloud,
@@ -41,14 +43,65 @@ export default function LogicStudio({ sessionMode = false }: LogicStudioProps) {
     connectionAttempts
   } = useTagSyncOnly();
 
-  // Get full project sync context for debugging
-  const { currentProjectId, connect, disconnect } = useProjectSync();
+  // Get full project sync context
+  const { currentProjectId, loadExistingTags, latestTags } = useProjectSync();
 
   // Debug connection state
   useEffect(() => {
     console.log(`🔍 LogicStudio: Connection state changed - connected: ${isConnected}, connecting: ${isConnecting}, error: ${lastError}`);
     console.log(`🔍 LogicStudio: Project ID: ${currentProjectId}`);
   }, [isConnected, isConnecting, lastError, currentProjectId]);
+
+  // Track which project we've loaded tags for to prevent infinite loading
+  const loadedProjectRef = useRef<string | null>(null);
+
+  // Load existing tags when component mounts and project is available
+  useEffect(() => {
+    if (currentProjectId && isConnected && loadedProjectRef.current !== currentProjectId) {
+      console.log(`📂 Loading existing tags for project ${currentProjectId}`);
+      loadedProjectRef.current = currentProjectId;
+
+      loadExistingTags().then(tags => {
+        if (tags.length > 0) {
+          console.log(`📂 Found ${tags.length} existing tags:`, tags);
+
+          // Generate ST code from existing tags and populate editor
+          const generatedSTCode = tagsToSTCodeWithScopes(tags);
+          console.log(`📂 Generated ST code from existing tags:`, generatedSTCode);
+          console.log(`📂 Current editor code:`, editorCode.substring(0, 100) + '...');
+          console.log(`📂 Editor code length:`, editorCode.length);
+
+          // Replace the editor content with existing tags
+          setEditorCode(generatedSTCode);
+          lastSyncedCodeRef.current = generatedSTCode; // Prevent immediate sync
+          console.log(`📂 Populated editor with ${tags.length} existing tags`);
+        } else {
+          console.log(`📂 No existing tags found for project ${currentProjectId}`);
+          console.log(`📂 Setting editor to empty PROGRAM structure`);
+
+          // Set empty PROGRAM structure when no tags exist
+          const emptyProgramCode = `PROGRAM Main
+    VAR
+        // Add your variables here
+    END_VAR
+
+    // Add your logic here
+
+END_PROGRAM`;
+
+          setEditorCode(emptyProgramCode);
+          lastSyncedCodeRef.current = emptyProgramCode; // Prevent immediate sync
+          console.log(`📂 Set editor to empty PROGRAM structure`);
+        }
+      }).catch(error => {
+        console.error('Failed to load existing tags:', error);
+        // Reset on error so we can try again
+        loadedProjectRef.current = null;
+      });
+    }
+  }, [currentProjectId, isConnected, loadExistingTags]);
+
+
   
   // Get persisted state or use defaults
   const moduleState = getModuleState('LogicStudio');
@@ -77,11 +130,13 @@ export default function LogicStudio({ sessionMode = false }: LogicStudioProps) {
 
 END_PROGRAM`);
   
-  const [vendor, setVendor] = useState((moduleState.vendor as "Rockwell" | "Siemens" | "Beckhoff") || "Rockwell");
+  const [vendor, setVendor] = useState((moduleState.vendor as "Rockwell" | "Siemens" | "Beckhoff"));
   const [showVendorDropdown, setShowVendorDropdown] = useState(false);
   const [showPendingChanges, setShowPendingChanges] = useState(moduleState.showPendingChanges || false);
   const [showAISuggestions, setShowAISuggestions] = useState(moduleState.showAISuggestions !== undefined ? moduleState.showAISuggestions : true);
   const [vendorContextEnabled, setVendorContextEnabled] = useState(moduleState.vendorContextEnabled || false);
+
+  // Note: Vendor selection removed - now uses project vendor automatically
   
   // Collapse state
   const [isCollapsed, setIsCollapsed] = useState(moduleState.isCollapsed || false);
@@ -108,6 +163,34 @@ END_PROGRAM`);
     }
   ];
 
+  // Handle tag sync - now uses project vendor automatically
+  const handleTagSyncWithVendorCheck = useCallback(async (code: string) => {
+    try {
+      // Parse the code to extract variable declarations for logging
+      const variablePattern = /^\s*(\w+)\s*:\s*(\w+)(?:\s*:=\s*[^;]+)?;/gm;
+      const matches = [...code.matchAll(variablePattern)];
+      const codeVariables = matches.map(match => match[1]);
+
+      // Check if any variables in code don't exist in current tags
+      const existingTagNames = latestTags.map(tag => tag.name);
+      const newVariables = codeVariables.filter(varName => !existingTagNames.includes(varName));
+
+      if (newVariables.length > 0) {
+        console.log(`🔍 Found ${newVariables.length} new variables: ${newVariables.join(', ')}`);
+        console.log('🔄 Syncing with project vendor (no manual selection needed)');
+      }
+
+      // Sync tags - backend will automatically use project vendor
+      console.log(`🔄 Syncing tags with project vendor`);
+      syncTags(vendor.toLowerCase(), code); // vendor parameter will be ignored by backend
+
+    } catch (error) {
+      console.error('Error in tag sync:', error);
+      // Fallback to direct sync
+      syncTags(vendor.toLowerCase(), code);
+    }
+  }, [vendor, syncTags, latestTags]);
+
   // Debounced auto-save (only in non-session mode)
   const debouncedSave = useCallback(
     (() => {
@@ -133,17 +216,30 @@ END_PROGRAM`);
     [sessionMode, saveModuleState, prompt, editorCode, vendor, showPendingChanges, showAISuggestions, vendorContextEnabled, isCollapsed, collapseLevel]
   );
 
-  // Debounced tag sync for real-time updates
+  // Track last synced code to prevent unnecessary syncs
+  const lastSyncedCodeRef = useRef<string>('');
+
+  // Debounced tag sync for real-time updates - only sync when code actually changes
   const debouncedTagSync = useCallback(
     (() => {
       let timeoutId: number;
       return () => {
         if (!sessionMode && isConnected && editorCode.trim()) {
-          clearTimeout(timeoutId);
-          timeoutId = setTimeout(() => {
-            console.log('🔄 Syncing tags from Logic Studio...');
-            syncTags(vendor.toLowerCase(), editorCode);
-          }, 1500); // Slightly longer delay for tag sync to avoid excessive parsing
+          // Only sync if code has actually changed
+          if (editorCode !== lastSyncedCodeRef.current) {
+            clearTimeout(timeoutId);
+            timeoutId = setTimeout(() => {
+              console.log('🔄 Syncing tags from Logic Studio - code changed');
+              console.log('🔄 Previous code length:', lastSyncedCodeRef.current.length);
+              console.log('🔄 New code length:', editorCode.length);
+              lastSyncedCodeRef.current = editorCode;
+
+              // Check if we need to prompt for vendor selection
+              handleTagSyncWithVendorCheck(editorCode);
+            }, 1500); // Slightly longer delay for tag sync to avoid excessive parsing
+          } else {
+            console.log('🔄 Skipping tag sync - code unchanged');
+          }
         }
       };
     })(),
@@ -154,9 +250,13 @@ END_PROGRAM`);
     debouncedSave();
   }, [debouncedSave]);
 
+  // Trigger tag sync when editor code changes
   useEffect(() => {
+    console.log(`🔄 Editor code changed, triggering debounced sync...`);
+    console.log(`🔄 Current code length: ${editorCode.length}`);
+    console.log(`🔄 Session mode: ${sessionMode}, Connected: ${isConnected}`);
     debouncedTagSync();
-  }, [debouncedTagSync]);
+  }, [editorCode, debouncedTagSync]);
 
   // Close dropdowns when clicking outside
   useEffect(() => {
@@ -249,18 +349,38 @@ END_PROGRAM`;
             </div>
           )}
 
-          {/* Debug Connection Button */}
+          {/* Refresh Tags Button */}
           {!sessionMode && (
             <button
               onClick={() => {
-                console.log('🔧 Debug: Manual connection attempt');
-                console.log('🔧 Current state:', { isConnected, isConnecting, currentProjectId, lastError });
-                connect();
+                console.log('🔄 Refreshing tags from database...');
+                loadExistingTags().then(tags => {
+                  if (tags.length > 0) {
+                    const generatedSTCode = tagsToSTCodeWithScopes(tags);
+                    setEditorCode(generatedSTCode);
+                    lastSyncedCodeRef.current = generatedSTCode;
+                    console.log(`🔄 Refreshed editor with ${tags.length} tags`);
+                  } else {
+                    const emptyProgramCode = `PROGRAM Main
+    VAR
+        // Add your variables here
+    END_VAR
+
+    // Add your logic here
+
+END_PROGRAM`;
+                    setEditorCode(emptyProgramCode);
+                    lastSyncedCodeRef.current = emptyProgramCode;
+                    console.log('🔄 No tags found, set empty program structure');
+                  }
+                }).catch(error => {
+                  console.error('Failed to refresh tags:', error);
+                });
               }}
-              className="px-2 py-1 bg-blue-500 text-white text-xs rounded hover:bg-blue-600"
-              title="Debug: Manual Connect"
+              className="bg-white border border-light px-2 py-2 rounded-md text-sm hover:bg-accent-light transition-colors cursor-pointer"
+              title="Refresh tags from database"
             >
-              Debug Connect
+              <RefreshCw className="w-4 h-4" />
             </button>
           )}
 
@@ -549,6 +669,8 @@ END_PROGRAM`;
       
       {/* AI Action Buttons - Hidden in minimal mode */}
       {collapseLevel < 2 && <AIActionButtons />}
+
+      {/* Vendor selection removed - now uses project vendor automatically */}
     </div>
   );
 }

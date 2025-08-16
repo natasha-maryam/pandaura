@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react';
 import { useParams } from 'react-router-dom';
 import { useTagSync, TagSyncResponse } from '../hooks/useTagSync';
 
@@ -15,6 +15,7 @@ export interface ProjectSyncContextType {
 
   // Tag sync actions
   syncTags: (vendor: string, stCode: string) => void;
+  loadExistingTags: () => Promise<any[]>;
 
   // Real-time tag updates
   latestTags: any[];
@@ -40,6 +41,7 @@ export function ProjectSyncProvider({ children }: ProjectSyncProviderProps) {
   const [currentProjectId, setCurrentProjectId] = useState<string | null>(null);
   const [latestTags, setLatestTags] = useState<any[]>([]);
   const [tagUpdateCallbacks, setTagUpdateCallbacks] = useState<Set<(response: TagSyncResponse) => void>>(new Set());
+  const [tagsLoaded, setTagsLoaded] = useState<Set<string>>(new Set()); // Track which projects have loaded tags
 
   // Determine current project ID from URL or localStorage
   useEffect(() => {
@@ -127,6 +129,55 @@ export function ProjectSyncProvider({ children }: ProjectSyncProviderProps) {
     tagSync.syncTags(currentProjectId, vendor, stCode);
   };
 
+  // Load existing tags for the current project
+  const loadExistingTags = useCallback(async (): Promise<any[]> => {
+    if (!currentProjectId) {
+      console.warn('Cannot load tags: no project ID available');
+      return [];
+    }
+
+    // Check if we've already loaded tags for this project
+    if (tagsLoaded.has(currentProjectId)) {
+      console.log(`📂 Tags already loaded for project ${currentProjectId}, returning cached tags`);
+      return latestTags;
+    }
+
+    try {
+      console.log(`📂 Loading existing tags for project ${currentProjectId}`);
+
+      // Make API call to get existing tags using the correct endpoint
+      const token = localStorage.getItem('authToken');
+      if (!token) {
+        throw new Error('No authentication token found');
+      }
+
+      const response = await fetch(`/api/v1/tags?projectId=${currentProjectId}&pageSize=1000`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+
+      if (!response.ok) {
+        throw new Error(`Failed to load tags: ${response.statusText}`);
+      }
+
+      const data = await response.json();
+      const tags = data.tags || [];
+
+      console.log(`📂 Loaded ${tags.length} existing tags for project ${currentProjectId}`);
+      setLatestTags(tags);
+
+      // Mark this project as loaded
+      setTagsLoaded(prev => new Set(prev).add(currentProjectId));
+
+      return tags;
+    } catch (error) {
+      console.error('Error loading existing tags:', error);
+      return [];
+    }
+  }, [currentProjectId, tagsLoaded, latestTags]); // Include dependencies
+
   // Register callback for tag updates
   const onTagsUpdated = (callback: (response: TagSyncResponse) => void) => {
     setTagUpdateCallbacks(prev => new Set(prev).add(callback));
@@ -154,6 +205,7 @@ export function ProjectSyncProvider({ children }: ProjectSyncProviderProps) {
 
     // Tag sync actions
     syncTags,
+    loadExistingTags,
 
     // Real-time tag updates
     latestTags,
