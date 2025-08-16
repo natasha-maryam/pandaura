@@ -9,6 +9,9 @@ import RefactorSuggestionBanner from "../pages/STEditor/RefactorSuggestionBanner
 import SmartEditToolbar from "../pages/STEditor/SmartEditToolbar";
 import { useModuleState } from "../contexts/ModuleStateContext";
 import { useTagSyncOnly, useProjectSync } from "../contexts/ProjectSyncContext";
+import { useProjectAutosave } from "../components/projects/hooks";
+import { useProjectNavigationProtection } from "../hooks/useNavigationProtection";
+import AutosaveStatus from "../components/ui/AutosaveStatus";
 import { tagsToSTCodeWithScopes } from "../utils/tagToSTConverter";
 import { RefreshCw } from "lucide-react";
 
@@ -191,12 +194,59 @@ END_PROGRAM`);
     }
   }, [vendor, syncTags, latestTags]);
 
-  // Debounced auto-save (only in non-session mode)
+  // Enhanced autosave for project state (only in non-session mode)
+  const projectId = currentProjectId ? parseInt(currentProjectId) : null;
+  const {
+    projectState,
+    updateProjectState,
+    isSaving,
+    lastSaved,
+    saveError,
+    hasUnsavedChanges,
+    saveNow
+  } = useProjectAutosave(projectId || 0, {
+    module: 'LogicStudio',
+    prompt,
+    editorCode,
+    vendor,
+    showPendingChanges,
+    showAISuggestions,
+    vendorContextEnabled,
+    isCollapsed,
+    collapseLevel,
+    lastActivity: new Date().toISOString()
+  });
+
+  // Navigation protection
+  const { handleNavigation } = useProjectNavigationProtection(
+    hasUnsavedChanges && !sessionMode,
+    saveNow
+  );
+
+  // Update project state when local state changes (only in non-session mode)
+  useEffect(() => {
+    if (!sessionMode && projectId) {
+      updateProjectState({
+        module: 'LogicStudio',
+        prompt,
+        editorCode,
+        vendor,
+        showPendingChanges,
+        showAISuggestions,
+        vendorContextEnabled,
+        isCollapsed,
+        collapseLevel,
+        lastActivity: new Date().toISOString()
+      });
+    }
+  }, [sessionMode, projectId, updateProjectState, prompt, editorCode, vendor, showPendingChanges, showAISuggestions, vendorContextEnabled, isCollapsed, collapseLevel]);
+
+  // Fallback to module state for session mode
   const debouncedSave = useCallback(
     (() => {
       let timeoutId: number;
       return () => {
-        if (!sessionMode) {
+        if (sessionMode) {
           clearTimeout(timeoutId);
           timeoutId = setTimeout(() => {
             saveModuleState('LogicStudio', {
@@ -347,6 +397,18 @@ END_PROGRAM`;
                 </div>
               )}
             </div>
+          )}
+
+          {/* Autosave Status */}
+          {!sessionMode && projectId && (
+            <AutosaveStatus
+              isSaving={isSaving}
+              lastSaved={lastSaved}
+              saveError={saveError}
+              hasUnsavedChanges={hasUnsavedChanges}
+              onManualSave={saveNow}
+              className="text-xs"
+            />
           )}
 
           {/* Refresh Tags Button */}

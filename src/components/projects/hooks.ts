@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { Project, ApiProject, convertApiToDisplay } from './types';
 import { ProjectsAPI } from './api';
 
@@ -198,5 +198,170 @@ export function useProject(projectId: number, autosaveInterval = 30000) {
     save,
     markDirty,
     reload: loadProject,
+  };
+}
+
+/**
+ * Enhanced autosave hook with comprehensive state management
+ * Follows the autosave integration guide requirements
+ */
+export function useProjectAutosave(projectId: number, initialState: any = {}) {
+  const [projectState, setProjectState] = useState(initialState);
+  const [isSaving, setIsSaving] = useState(false);
+  const [lastSaved, setLastSaved] = useState<Date | null>(null);
+  const [saveError, setSaveError] = useState<string | null>(null);
+  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
+
+  const lastSavedStateRef = useRef<any>(null);
+  const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const retryCountRef = useRef(0);
+  const maxRetries = 3;
+
+  // Deep comparison function to detect changes
+  const hasChanged = useCallback((current: any, last: any): boolean => {
+    return JSON.stringify(current) !== JSON.stringify(last);
+  }, []);
+
+  // Autosave function with retry logic
+  const performAutosave = useCallback(async (state: any, isManualSave = false): Promise<boolean> => {
+    if (!projectId || !hasChanged(state, lastSavedStateRef.current)) {
+      return true;
+    }
+
+    setIsSaving(true);
+    setSaveError(null);
+
+    try {
+      if (isManualSave) {
+        await ProjectsAPI.saveProject(projectId, { autosaveState: state });
+      } else {
+        await ProjectsAPI.autosaveProject(projectId, state);
+      }
+
+      lastSavedStateRef.current = structuredClone(state);
+      setLastSaved(new Date());
+      setHasUnsavedChanges(false);
+      retryCountRef.current = 0;
+
+      return true;
+    } catch (error: any) {
+      const errorMessage = error.response?.data?.error || error.message || 'Auto-save failed';
+      console.error('Auto-save failed:', errorMessage);
+
+      // Retry logic for network errors
+      if (retryCountRef.current < maxRetries && !isManualSave) {
+        retryCountRef.current++;
+        console.log(`Retrying auto-save (attempt ${retryCountRef.current}/${maxRetries})`);
+
+        // Exponential backoff: 2s, 4s, 8s
+        const retryDelay = Math.pow(2, retryCountRef.current) * 1000;
+        setTimeout(() => performAutosave(state, false), retryDelay);
+      } else {
+        setSaveError(errorMessage);
+
+        // Cache to localStorage as fallback
+        try {
+          const fallbackKey = `pandaura_project_${projectId}_fallback`;
+          localStorage.setItem(fallbackKey, JSON.stringify({
+            state,
+            timestamp: Date.now(),
+            projectId
+          }));
+          console.log('State cached to localStorage as fallback');
+        } catch (localError) {
+          console.error('Failed to cache state to localStorage:', localError);
+        }
+      }
+
+      return false;
+    } finally {
+      setIsSaving(false);
+    }
+  }, [projectId, hasChanged]);
+
+  // Debounced autosave
+  const debouncedAutosave = useCallback((state: any) => {
+    if (saveTimeoutRef.current) {
+      clearTimeout(saveTimeoutRef.current);
+    }
+
+    saveTimeoutRef.current = setTimeout(() => {
+      performAutosave(state, false);
+    }, 2000); // 2 second debounce
+  }, [performAutosave]);
+
+  // Update project state and trigger autosave
+  const updateProjectState = useCallback((updates: Partial<any> | ((prev: any) => any)) => {
+    setProjectState(prev => {
+      const newState = typeof updates === 'function' ? updates(prev) : { ...prev, ...updates };
+
+      // Check if state actually changed
+      if (hasChanged(newState, lastSavedStateRef.current)) {
+        setHasUnsavedChanges(true);
+        debouncedAutosave(newState);
+      }
+
+      return newState;
+    });
+  }, [hasChanged, debouncedAutosave]);
+
+  // Manual save function
+  const saveNow = useCallback(async (): Promise<boolean> => {
+    return await performAutosave(projectState, true);
+  }, [performAutosave, projectState]);
+
+  // Load fallback state from localStorage
+  const loadFallbackState = useCallback(() => {
+    try {
+      const fallbackKey = `pandaura_project_${projectId}_fallback`;
+      const fallbackData = localStorage.getItem(fallbackKey);
+
+      if (fallbackData) {
+        const { state, timestamp } = JSON.parse(fallbackData);
+        const fallbackAge = Date.now() - timestamp;
+
+        // Only use fallback if it's less than 1 hour old
+        if (fallbackAge < 60 * 60 * 1000) {
+          console.log('Loaded fallback state from localStorage');
+          setProjectState(state);
+          setHasUnsavedChanges(true);
+
+          // Try to save the fallback state
+          performAutosave(state, false);
+        }
+
+        // Clean up old fallback
+        localStorage.removeItem(fallbackKey);
+      }
+    } catch (error) {
+      console.error('Failed to load fallback state:', error);
+    }
+  }, [projectId, performAutosave]);
+
+  // Initialize with fallback check
+  useEffect(() => {
+    if (projectId) {
+      loadFallbackState();
+    }
+  }, [projectId, loadFallbackState]);
+
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      if (saveTimeoutRef.current) {
+        clearTimeout(saveTimeoutRef.current);
+      }
+    };
+  }, []);
+
+  return {
+    projectState,
+    updateProjectState,
+    isSaving,
+    lastSaved,
+    saveError,
+    hasUnsavedChanges,
+    saveNow,
+    loadFallbackState
   };
 }

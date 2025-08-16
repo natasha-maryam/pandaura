@@ -8,7 +8,9 @@ import {
 } from "lucide-react";
 import pandauraLogo from "../assets/logo.png";
 import { useModuleState } from "../contexts/ModuleStateContext";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useParams } from "react-router-dom";
+import { useProjectAutosave } from "../components/projects/hooks";
+import AutosaveStatus from "../components/ui/AutosaveStatus";
 
 interface AskPandauraProps {
   sessionMode?: boolean;
@@ -17,12 +19,40 @@ interface AskPandauraProps {
 export default function AskPandaura({ sessionMode = false }: AskPandauraProps) {
   const { getModuleState, saveModuleState } = useModuleState();
   const navigate = useNavigate();
-  
+  const { projectId } = useParams<{ projectId: string }>();
+
   // Get persisted state or use defaults
   const moduleState = getModuleState('AskPandaura');
   const [chatMessage, setChatMessage] = useState(moduleState.chatMessage || "");
   const [showConversationsModal, setShowConversationsModal] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+
+  // Enhanced autosave for project state (only in non-session mode)
+  const currentProjectId = projectId ? parseInt(projectId) : null;
+  const {
+    projectState,
+    updateProjectState,
+    isSaving,
+    lastSaved,
+    saveError,
+    hasUnsavedChanges,
+    saveNow
+  } = useProjectAutosave(currentProjectId || 0, {
+    module: 'AskPandaura',
+    chatMessage,
+    lastActivity: new Date().toISOString()
+  });
+
+  // Update project state when chat message changes (only in non-session mode)
+  useEffect(() => {
+    if (!sessionMode && currentProjectId) {
+      updateProjectState({
+        module: 'AskPandaura',
+        chatMessage,
+        lastActivity: new Date().toISOString()
+      });
+    }
+  }, [sessionMode, currentProjectId, updateProjectState, chatMessage]);
 
   // Detect sidebar state changes
   useEffect(() => {
@@ -135,15 +165,29 @@ export default function AskPandaura({ sessionMode = false }: AskPandauraProps) {
               Your AI co-engineer for automation, electrical, robotics, and everything in between.
             </p>
           </div>
-          
-          {/* Conversations Icon */}
-          <button
-            onClick={() => setShowConversationsModal(true)}
-            className="p-2 rounded-md hover:bg-gray-100 transition-colors"
-            title="View Conversations"
-          >
-            <MessageSquare className="w-6 h-6 text-primary" />
-          </button>
+
+          <div className="flex items-center gap-4">
+            {/* Autosave Status */}
+            {!sessionMode && currentProjectId && (
+              <AutosaveStatus
+                isSaving={isSaving}
+                lastSaved={lastSaved}
+                saveError={saveError}
+                hasUnsavedChanges={hasUnsavedChanges}
+                onManualSave={saveNow}
+                className="text-xs"
+              />
+            )}
+
+            {/* Conversations Icon */}
+            <button
+              onClick={() => setShowConversationsModal(true)}
+              className="p-2 rounded-md hover:bg-gray-100 transition-colors"
+              title="View Conversations"
+            >
+              <MessageSquare className="w-6 h-6 text-primary" />
+            </button>
+          </div>
         </div>
 
         <div className="text-muted mt-4 px-6 flex flex-col items-center text-center">

@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useMemo } from "react";
+import React, { useState, useCallback, useMemo, useEffect } from "react";
 import { useNavigate, useLocation, useParams } from "react-router-dom";
 import {
   Menu,
@@ -14,6 +14,7 @@ import NavbarIcons from "../pages/NavbarIcons";
 import PandauraOrb from "../components/PandauraOrb";
 import { useModuleState } from "../contexts/ModuleStateContext";
 import { config, getHostInfo, isOffline } from "../config/environment";
+import { useProjectNavigationProtection } from "../hooks/useNavigationProtection";
 
 const tools = [
   { name: "Logic Studio", path: "/logic-studio", icon: Cpu },
@@ -56,6 +57,39 @@ export default function SharedLayout({ children }: SharedLayoutProps) {
 
   // Check if we're in a project workspace context
   const isProjectWorkspace = location.pathname.startsWith('/workspace/');
+
+  // Navigation protection for project workspaces
+  // Note: This is a basic implementation. Individual components should implement
+  // their own autosave hooks for more granular control
+  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
+
+  const handleSaveAndNavigate = useCallback(async (): Promise<boolean> => {
+    try {
+      // This is a fallback save - individual components should handle their own saves
+      console.log('Performing fallback save before navigation');
+      return true;
+    } catch (error) {
+      console.error('Failed to save before navigation:', error);
+      return false;
+    }
+  }, []);
+
+  const { handleNavigation } = useProjectNavigationProtection(
+    hasUnsavedChanges && isProjectWorkspace,
+    handleSaveAndNavigate
+  );
+
+  // Listen for unsaved changes from child components
+  useEffect(() => {
+    const handleUnsavedChanges = (event: CustomEvent) => {
+      setHasUnsavedChanges(event.detail.hasChanges);
+    };
+
+    window.addEventListener('pandaura:unsaved-changes', handleUnsavedChanges as EventListener);
+    return () => {
+      window.removeEventListener('pandaura:unsaved-changes', handleUnsavedChanges as EventListener);
+    };
+  }, []);
   
   // Get tools with project-specific paths if in project workspace
   const navigationTools = useMemo(() => {
@@ -93,24 +127,33 @@ export default function SharedLayout({ children }: SharedLayoutProps) {
       projectId,
       isProjectWorkspace
     });
-    navigate(toolPath);
-  }, [navigate, location.pathname, projectId, isProjectWorkspace]);
+
+    if (isProjectWorkspace && hasUnsavedChanges) {
+      handleNavigation(toolPath);
+    } else {
+      navigate(toolPath);
+    }
+  }, [navigate, location.pathname, projectId, isProjectWorkspace, hasUnsavedChanges, handleNavigation]);
 
   const handleLogoClick = useCallback(() => {
-    setShowSaveModal(true);
-  }, []);
+    if (isProjectWorkspace && hasUnsavedChanges) {
+      handleNavigation('/home');
+    } else {
+      setShowSaveModal(true);
+    }
+  }, [isProjectWorkspace, hasUnsavedChanges, handleNavigation]);
 
-  const handleSaveAndGoHome = useCallback(() => {
+  const handleSaveAndGoHome = useCallback(async () => {
     // Trigger final save for current module
     const currentTool = getCurrentTool();
     console.log(`Auto-saving ${currentTool} progress...`);
-    
-    // Additional save logic can be added here if needed
-    // The individual modules are already auto-saving via their useEffect hooks
-    
-    setShowSaveModal(false);
-    navigate('/home');
-  }, [navigate]);
+
+    const saveSuccess = await handleSaveAndNavigate();
+    if (saveSuccess) {
+      setShowSaveModal(false);
+      navigate('/home');
+    }
+  }, [navigate, handleSaveAndNavigate]);
 
   const handleGoHomeWithoutSaving = useCallback(() => {
     setShowSaveModal(false);

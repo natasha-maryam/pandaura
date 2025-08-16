@@ -13,6 +13,8 @@ import Modal from "../ui/Modal";
 import Button from "../ui/Button";
 import { useTagSyncOnly } from "../../contexts/ProjectSyncContext";
 import { TagSyncResponse } from "../../hooks/useTagSync";
+import { useProjectAutosave } from "../projects/hooks";
+import AutosaveStatus from "../ui/AutosaveStatus";
 import { 
   validateTagTypeForVendor, 
   validateAddressForVendor, 
@@ -78,6 +80,23 @@ const TagDatabaseManagerContent: React.FC<TagDatabaseManagerProps> = ({ sessionM
 
   const vendorDropdownRef = useRef<HTMLDivElement>(null);
 
+  // Enhanced autosave for tag management state
+  const {
+    projectState: tagManagerState,
+    updateProjectState: updateTagManagerState,
+    isSaving: isAutosaving,
+    lastSaved: lastAutosaved,
+    saveError: autosaveError,
+    hasUnsavedChanges: hasUnsavedTagChanges,
+    saveNow: saveTagManagerState
+  } = useProjectAutosave(currentProjectId || 0, {
+    module: 'TagManager',
+    filters,
+    editingTag,
+    lastActivity: new Date().toISOString(),
+    lastRealTimeUpdate
+  });
+
   // Handle real-time tag updates from WebSocket
   const handleRealTimeTagUpdate = useCallback((response: TagSyncResponse) => {
     if (response.type === 'tags_updated' && response.success && response.tags) {
@@ -89,13 +108,36 @@ const TagDatabaseManagerContent: React.FC<TagDatabaseManagerProps> = ({ sessionM
         refreshTags();
       }
 
+      // Update autosave state
+      updateTagManagerState({
+        module: 'TagManager',
+        filters,
+        editingTag,
+        lastActivity: new Date().toISOString(),
+        lastRealTimeUpdate: Date.now(),
+        tagsCount: response.tags.length
+      });
+
       showToast({
         variant: 'success',
         title: 'Tags Updated',
         message: `${response.parsedCount || response.tags.length} tags synced from Logic Studio`
       });
     }
-  }, [currentProjectId, refreshTags, showToast]);
+  }, [currentProjectId, refreshTags, showToast, updateTagManagerState, filters, editingTag]);
+
+  // Update autosave state when filters or editing state changes
+  useEffect(() => {
+    if (currentProjectId) {
+      updateTagManagerState({
+        module: 'TagManager',
+        filters,
+        editingTag,
+        lastActivity: new Date().toISOString(),
+        lastRealTimeUpdate
+      });
+    }
+  }, [currentProjectId, updateTagManagerState, filters, editingTag, lastRealTimeUpdate]);
 
   // Subscribe to real-time tag updates
   useEffect(() => {
@@ -559,6 +601,18 @@ const TagDatabaseManagerContent: React.FC<TagDatabaseManagerProps> = ({ sessionM
                     </div>
                   )}
                 </div>
+              )}
+
+              {/* Autosave Status */}
+              {!sessionMode && currentProjectId && (
+                <AutosaveStatus
+                  isSaving={isAutosaving}
+                  lastSaved={lastAutosaved}
+                  saveError={autosaveError}
+                  hasUnsavedChanges={hasUnsavedTagChanges}
+                  onManualSave={saveTagManagerState}
+                  className="text-xs"
+                />
               )}
             </div>
 
