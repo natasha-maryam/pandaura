@@ -1,6 +1,6 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useCallback } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import {  ChevronDown, Bot, Edit, Trash2, Plus, Check, X, RefreshCw, AlertTriangle, Upload, Download } from "lucide-react";
+import {  ChevronDown, Bot, Edit, Trash2, Plus, Check, X, RefreshCw, AlertTriangle, Upload, Download, Wifi, WifiOff, Clock } from "lucide-react";
 
 import { TagsProvider, useTags } from "./context";
 import { TagsAPI, Tag, CreateTagData } from "./api";
@@ -11,6 +11,8 @@ import VendorImportModal from "./VendorImportModal";
 import { useToast } from "../ui/Toast";
 import Modal from "../ui/Modal";
 import Button from "../ui/Button";
+import { useTagSyncOnly } from "../../contexts/ProjectSyncContext";
+import { TagSyncResponse } from "../../hooks/useTagSync";
 import { 
   validateTagTypeForVendor, 
   validateAddressForVendor, 
@@ -48,6 +50,18 @@ const TagDatabaseManagerContent: React.FC<TagDatabaseManagerProps> = ({ sessionM
     refreshTags
   } = useTags();
 
+  // Real-time tag sync
+  const {
+    isConnected,
+    isConnecting,
+    lastError: syncError,
+    lastSyncTime,
+    queuedSyncs,
+    latestTags,
+    onTagsUpdated,
+    offTagsUpdated
+  } = useTagSyncOnly();
+
   const [showVendorDropdown, setShowVendorDropdown] = useState(false);
   const [editingTag, setEditingTag] = useState<string | null>(null);
   const [currentProjectId, setCurrentProjectId] = useState<number | null>(null);
@@ -60,8 +74,36 @@ const TagDatabaseManagerContent: React.FC<TagDatabaseManagerProps> = ({ sessionM
   const [showVendorExportModal, setShowVendorExportModal] = useState(false);
   const [showVendorImportModal, setShowVendorImportModal] = useState(false);
   const [currentProject, setCurrentProject] = useState<Project | null>(null);
-  
+  const [lastRealTimeUpdate, setLastRealTimeUpdate] = useState<number | null>(null);
+
   const vendorDropdownRef = useRef<HTMLDivElement>(null);
+
+  // Handle real-time tag updates from WebSocket
+  const handleRealTimeTagUpdate = useCallback((response: TagSyncResponse) => {
+    if (response.type === 'tags_updated' && response.success && response.tags) {
+      console.log(`📡 Received real-time tag update: ${response.tags.length} tags`);
+      setLastRealTimeUpdate(Date.now());
+
+      // Refresh tags to get the latest data
+      if (currentProjectId) {
+        refreshTags();
+      }
+
+      showToast({
+        variant: 'success',
+        title: 'Tags Updated',
+        message: `${response.parsedCount || response.tags.length} tags synced from Logic Studio`
+      });
+    }
+  }, [currentProjectId, refreshTags, showToast]);
+
+  // Subscribe to real-time tag updates
+  useEffect(() => {
+    onTagsUpdated(handleRealTimeTagUpdate);
+    return () => {
+      offTagsUpdated(handleRealTimeTagUpdate);
+    };
+  }, [handleRealTimeTagUpdate, onTagsUpdated, offTagsUpdated]);
 
   // Close dropdowns when clicking outside
   useEffect(() => {
@@ -477,15 +519,44 @@ const TagDatabaseManagerContent: React.FC<TagDatabaseManagerProps> = ({ sessionM
         <>
           {/* Sticky Top Bar */}
           <div className="sticky top-0 z-30 bg-white border-b border-light px-6 py-4 flex justify-between items-center shadow-sm">
-            <div>
-              <h1 className="text-xl font-bold text-primary">Tag Database Manager</h1>
-              {currentProjectId && (
-                <div className="text-sm text-secondary mt-1">
-                  Project ID: {currentProjectId}
-                  {availableProjects.length > 0 && (
-                    <span className="ml-2">
-                      - {availableProjects.find(p => p.id === currentProjectId)?.project_name || 'Unknown Project'}
-                    </span>
+            <div className="flex items-center gap-4">
+              <div>
+                <h1 className="text-xl font-bold text-primary">Tag Database Manager</h1>
+                {currentProjectId && (
+                  <div className="text-sm text-secondary mt-1">
+                    Project ID: {currentProjectId}
+                    {availableProjects.length > 0 && (
+                      <span className="ml-2">
+                        - {availableProjects.find(p => p.id === currentProjectId)?.project_name || 'Unknown Project'}
+                      </span>
+                    )}
+                  </div>
+                )}
+              </div>
+
+              {/* Real-time Sync Status */}
+              {!sessionMode && currentProjectId && (
+                <div className="flex items-center gap-2">
+                  {isConnecting ? (
+                    <div className="flex items-center gap-1 text-yellow-600">
+                      <Clock className="w-4 h-4 animate-pulse" />
+                      <span className="text-xs">Connecting...</span>
+                    </div>
+                  ) : isConnected ? (
+                    <div className="flex items-center gap-1 text-green-600">
+                      <Wifi className="w-4 h-4" />
+                      <span className="text-xs">Live Sync</span>
+                      {lastRealTimeUpdate && (
+                        <span className="text-xs text-gray-500">
+                          (Updated {Math.round((Date.now() - lastRealTimeUpdate) / 1000)}s ago)
+                        </span>
+                      )}
+                    </div>
+                  ) : (
+                    <div className="flex items-center gap-1 text-red-600">
+                      <WifiOff className="w-4 h-4" />
+                      <span className="text-xs">Offline</span>
+                    </div>
                   )}
                 </div>
               )}

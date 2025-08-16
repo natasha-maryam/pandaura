@@ -20,6 +20,7 @@ import { ModuleStateProvider } from "./contexts/ModuleStateContext";
 import { AuthProvider } from "./contexts/AuthContext";
 import { SignUpProvider } from "./contexts/SignUpContext";
 import { ToastProvider } from "./components/ui/Toast";
+import { ProjectSyncProvider } from "./contexts/ProjectSyncContext";
 import { debugConfig } from "./config/environment";
 import SignUp from "./pages/SignUp";
 
@@ -60,11 +61,11 @@ export default function App() {
         <Route path="/case-studies" element={<ProtectedRoute><SharedLayout><CaseStudies /></SharedLayout></ProtectedRoute>} />
         
         {/* Project Workspace - All tools with project context */}
-        <Route path="/workspace/:projectId/pandaura-as" element={<ProtectedRoute><SharedLayout><AskPandaura /></SharedLayout></ProtectedRoute>} />
-        <Route path="/workspace/:projectId/logic-studio" element={<ProtectedRoute><SharedLayout><LogicStudio /></SharedLayout></ProtectedRoute>} />
-        <Route path="/workspace/:projectId/autodocs" element={<ProtectedRoute><SharedLayout><AutoDocs /></SharedLayout></ProtectedRoute>} />
-        <Route path="/workspace/:projectId/tag-database" element={<ProtectedRoute><SharedLayout><TagDatabaseManager /></SharedLayout></ProtectedRoute>} />
-        <Route path="/workspace/:projectId/case-studies" element={<ProtectedRoute><SharedLayout><CaseStudies /></SharedLayout></ProtectedRoute>} />
+        <Route path="/workspace/:projectId/pandaura-as" element={<ProtectedRoute><ProjectSyncProvider><SharedLayout><AskPandaura /></SharedLayout></ProjectSyncProvider></ProtectedRoute>} />
+        <Route path="/workspace/:projectId/logic-studio" element={<ProtectedRoute><ProjectSyncProvider><SharedLayout><LogicStudio /></SharedLayout></ProjectSyncProvider></ProtectedRoute>} />
+        <Route path="/workspace/:projectId/autodocs" element={<ProtectedRoute><ProjectSyncProvider><SharedLayout><AutoDocs /></SharedLayout></ProjectSyncProvider></ProtectedRoute>} />
+        <Route path="/workspace/:projectId/tag-database" element={<ProtectedRoute><ProjectSyncProvider><SharedLayout><TagDatabaseManager /></SharedLayout></ProjectSyncProvider></ProtectedRoute>} />
+        <Route path="/workspace/:projectId/case-studies" element={<ProtectedRoute><ProjectSyncProvider><SharedLayout><CaseStudies /></SharedLayout></ProjectSyncProvider></ProtectedRoute>} />
         
         {/* Quick Tools - One-time Sessions */}
         <Route path="/tool/logic" element={<SessionLayout><LogicStudio sessionMode={true} /></SessionLayout>} />

@@ -8,6 +8,7 @@ import AutoFixTooltip from "../pages/STEditor/AutoFixTooltip";
 import RefactorSuggestionBanner from "../pages/STEditor/RefactorSuggestionBanner";
 import SmartEditToolbar from "../pages/STEditor/SmartEditToolbar";
 import { useModuleState } from "../contexts/ModuleStateContext";
+import { useTagSyncOnly } from "../contexts/ProjectSyncContext";
 
 import {
   UploadCloud,
@@ -15,6 +16,9 @@ import {
   ChevronLeft,
   ChevronRight,
   Settings,
+  Wifi,
+  WifiOff,
+  Clock,
 } from "lucide-react";
 
 const vendorOptions = ["Rockwell", "Siemens", "Beckhoff"];
@@ -25,6 +29,17 @@ interface LogicStudioProps {
 
 export default function LogicStudio({ sessionMode = false }: LogicStudioProps) {
   const { getModuleState, saveModuleState } = useModuleState();
+
+  // Real-time tag sync
+  const {
+    isConnected,
+    isConnecting,
+    lastError,
+    lastSyncTime,
+    queuedSyncs,
+    syncTags,
+    connectionAttempts
+  } = useTagSyncOnly();
   
   // Get persisted state or use defaults
   const moduleState = getModuleState('LogicStudio');
@@ -109,9 +124,30 @@ END_PROGRAM`);
     [sessionMode, saveModuleState, prompt, editorCode, vendor, showPendingChanges, showAISuggestions, vendorContextEnabled, isCollapsed, collapseLevel]
   );
 
+  // Debounced tag sync for real-time updates
+  const debouncedTagSync = useCallback(
+    (() => {
+      let timeoutId: number;
+      return () => {
+        if (!sessionMode && isConnected && editorCode.trim()) {
+          clearTimeout(timeoutId);
+          timeoutId = setTimeout(() => {
+            console.log('🔄 Syncing tags from Logic Studio...');
+            syncTags(vendor.toLowerCase(), editorCode);
+          }, 1500); // Slightly longer delay for tag sync to avoid excessive parsing
+        }
+      };
+    })(),
+    [sessionMode, isConnected, editorCode, vendor, syncTags]
+  );
+
   useEffect(() => {
     debouncedSave();
   }, [debouncedSave]);
+
+  useEffect(() => {
+    debouncedTagSync();
+  }, [debouncedTagSync]);
 
   // Close dropdowns when clicking outside
   useEffect(() => {
@@ -173,7 +209,37 @@ END_PROGRAM`;
       <header className="flex items-center justify-between bg-surface px-6 py-4 border-b border-light shadow">
         <div className="flex items-center gap-3">
           <h1 className="text-xl font-bold text-primary">Logic Studio</h1>
-          
+
+          {/* Real-time Sync Status */}
+          {!sessionMode && (
+            <div className="flex items-center gap-2">
+              {isConnecting ? (
+                <div className="flex items-center gap-1 text-yellow-600">
+                  <Clock className="w-4 h-4 animate-pulse" />
+                  <span className="text-xs">Connecting...</span>
+                </div>
+              ) : isConnected ? (
+                <div className="flex items-center gap-1 text-green-600">
+                  <Wifi className="w-4 h-4" />
+                  <span className="text-xs">Live Sync</span>
+                  {queuedSyncs > 0 && (
+                    <span className="bg-blue-100 text-blue-800 text-xs px-1 rounded">
+                      {queuedSyncs}
+                    </span>
+                  )}
+                </div>
+              ) : (
+                <div className="flex items-center gap-1 text-red-600">
+                  <WifiOff className="w-4 h-4" />
+                  <span className="text-xs">Offline</span>
+                  {connectionAttempts > 0 && (
+                    <span className="text-xs">({connectionAttempts})</span>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+
           {/* Collapse Button */}
           <div className="relative" ref={collapseSliderRef}>
             <button
