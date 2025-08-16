@@ -11,6 +11,15 @@ import VendorImportModal from "./VendorImportModal";
 import { useToast } from "../ui/Toast";
 import Modal from "../ui/Modal";
 import Button from "../ui/Button";
+import { 
+  validateTagTypeForVendor, 
+  validateAddressForVendor, 
+  getAvailableTagTypes, 
+  getInvalidTypeMessage, 
+  getInvalidAddressMessage,
+  type Vendor,
+  type TagType 
+} from "../../utils/vendorValidation";
 
 interface TagDatabaseManagerProps {
   sessionMode?: boolean;
@@ -163,9 +172,59 @@ const TagDatabaseManagerContent: React.FC<TagDatabaseManagerProps> = ({ sessionM
 
   const handleEditTag = async (tagId: string, field: keyof Tag, value: any) => {
     try {
+      // Get the current tag to access vendor information
+      const tag = tags.find(t => t.id === tagId);
+      if (!tag) {
+        throw new Error('Tag not found');
+      }
+
+      // Validate vendor-specific constraints
+      if (field === 'type') {
+        const isValidType = validateTagTypeForVendor(value as TagType, tag.vendor as Vendor);
+        if (!isValidType) {
+          const errorMessage = getInvalidTypeMessage(value as TagType, tag.vendor as Vendor);
+          showToast({
+            variant: 'error',
+            title: 'Invalid Data Type',
+            message: errorMessage,
+            duration: 5000
+          });
+          return; // Don't proceed with the update
+        }
+      }
+      
+      if (field === 'address') {
+        const isValidAddress = validateAddressForVendor(value, tag.vendor as Vendor);
+        if (!isValidAddress) {
+          const errorMessage = getInvalidAddressMessage(value, tag.vendor as Vendor);
+          showToast({
+            variant: 'error',
+            title: 'Invalid Address Format',
+            message: errorMessage,
+            duration: 5000
+          });
+          return; // Don't proceed with the update
+        }
+      }
+      
       await updateTag(tagId, { [field]: value });
+      
+      // Show success message for successful updates
+      showToast({
+        variant: 'success',
+        title: 'Tag Updated',
+        message: `${field} updated successfully`,
+        duration: 3000
+      });
     } catch (error) {
       console.error('Error updating tag:', error);
+      const errorMessage = error instanceof Error ? error.message : 'Failed to update tag';
+      showToast({
+        variant: 'error',
+        title: 'Update Failed',
+        message: errorMessage,
+        duration: 5000
+      });
     }
   };
 
@@ -457,13 +516,13 @@ const TagDatabaseManagerContent: React.FC<TagDatabaseManagerProps> = ({ sessionM
             Import Tags
           </button>
           
-          <button 
+          {/* <button 
             onClick={() => handleExport('excel')}
             disabled={loading || !currentProjectId}
             className="bg-primary text-white px-4 py-2 rounded-md text-sm hover:bg-secondary transition-colors cursor-pointer disabled:opacity-50"
           >
             Export to Excel (.xlsx)
-          </button>
+          </button> */}
           
           <button
             onClick={handleExportButtonClick}
@@ -663,13 +722,9 @@ const TagDatabaseManagerContent: React.FC<TagDatabaseManagerProps> = ({ sessionM
                         onChange={(e) => handleEditTag(tag.id, 'type', e.target.value)}
                         className="border border-light rounded px-2 py-1 text-sm"
                       >
-                        <option value="BOOL">BOOL</option>
-                        <option value="INT">INT</option>
-                        <option value="REAL">REAL</option>
-                        <option value="DINT">DINT</option>
-                        <option value="STRING">STRING</option>
-                        <option value="TIMER">TIMER</option>
-                        <option value="COUNTER">COUNTER</option>
+                        {getAvailableTagTypes(tag.vendor as Vendor).map((tagType) => (
+                          <option key={tagType} value={tagType}>{tagType}</option>
+                        ))}
                       </select>
                     ) : (
                       <span className="text-sm font-mono">{tag.type}</span>

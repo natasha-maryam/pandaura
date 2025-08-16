@@ -156,11 +156,13 @@ export default function RockwellImportModal({
               <div className="flex items-start space-x-2">
                 <AlertTriangle className="w-5 h-5 text-yellow-600 flex-shrink-0 mt-0.5" />
                 <div>
-                  <h4 className="text-sm font-medium text-yellow-800">Import Guidelines</h4>
+                  <h4 className="text-sm font-medium text-yellow-800">Import Guidelines & Address Formats</h4>
                   <ul className="text-sm text-yellow-700 mt-1 space-y-1">
                     <li>• Ensure your file contains proper Rockwell tag definitions</li>
                     <li>• Duplicate tag names will be updated with new values</li>
-                    <li>• Invalid data types or addresses will be reported as errors</li>
+                    <li>• <strong>Address formats:</strong> I:x/y (Input), O:x/y (Output), Nx:y (Integer), Fx:y (Float), or symbolic names</li>
+                    <li>• <strong>Valid examples:</strong> I:1/0, O:2/0, N7:0, F8:0, B3:1, MyTag_1</li>
+                    <li>• Invalid addresses will be reported as errors</li>
                     <li>• Large files may take several seconds to process</li>
                   </ul>
                 </div>

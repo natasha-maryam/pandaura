@@ -343,6 +343,35 @@ export class TagsAPI {
     return response.blob();
   }
 
+  // Siemens-specific export functions
+  static async exportSiemensCsv(projectId: number): Promise<Blob> {
+    const response = await fetch(`${API_BASE_URL}/tags/projects/${projectId}/export/siemens/csv`, {
+      method: 'GET',
+      headers: getAuthHeaders(),
+    });
+
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({ error: 'Network error' }));
+      throw new Error(error.error || 'Failed to export Siemens CSV');
+    }
+
+    return response.blob();
+  }
+
+  static async exportSiemensXml(projectId: number): Promise<Blob> {
+    const response = await fetch(`${API_BASE_URL}/tags/projects/${projectId}/export/siemens/xml`, {
+      method: 'GET',
+      headers: getAuthHeaders(),
+    });
+
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({ error: 'Network error' }));
+      throw new Error(error.error || 'Failed to export Siemens XML');
+    }
+
+    return response.blob();
+  }
+
   static async importBeckhoffCsv(projectId: number, file: File): Promise<{
     success: boolean;
     inserted?: number;
@@ -439,6 +468,32 @@ export class TagsAPI {
     if (!response.ok) {
       const error = await response.json().catch(() => ({ error: 'Network error' }));
       throw new Error(error.error || 'Failed to import Rockwell L5X');
+    }
+
+    return response.json();
+  }
+
+  // Siemens import methods
+  static async importSiemensCsv(projectId: number, file: File): Promise<{
+    success: boolean;
+    inserted?: number;
+    errors?: Array<{ row: number; errors: string[]; raw: any }>;
+    processed?: number;
+  }> {
+    const formData = new FormData();
+    formData.append('file', file);
+
+    const response = await fetch(`${API_BASE_URL}/tags/projects/${projectId}/import/siemens/csv`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${localStorage.getItem('authToken')}`,
+      },
+      body: formData,
+    });
+
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({ error: 'Network error' }));
+      throw new Error(error.error || 'Failed to import Siemens CSV');
     }
 
     return response.json();

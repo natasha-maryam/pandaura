@@ -2,6 +2,18 @@ import React, { useState } from 'react';
 import { Modal, Button, Input, Dropdown, Textarea } from '../ui';
 import { useToast } from '../ui/Toast';
 import { CreateTagData } from './api';
+import { validateAddress, getVendorAddressDescription, getAddressExamples } from '../../utils/addressValidation';
+
+interface FormErrors {
+  name?: string;
+  description?: string;
+  type?: string;
+  address?: string;
+  default_value?: string;
+  vendor?: string;
+  scope?: string;
+  tag_type?: string;
+}
 
 interface CreateTagModalProps {
   isOpen: boolean;
@@ -20,6 +32,19 @@ const tagTypes = [
   { value: "TIMER", label: "TIMER" },
   { value: "COUNTER", label: "COUNTER" },
 ];
+
+// Vendor-specific supported data types
+const vendorSupportedTypes = {
+  rockwell: ['BOOL', 'INT', 'DINT', 'REAL', 'STRING', 'TIMER', 'COUNTER'],
+  siemens: ['BOOL', 'INT', 'DINT', 'REAL', 'STRING'], // Siemens doesn't support TIMER/COUNTER
+  beckhoff: ['BOOL', 'INT', 'DINT', 'REAL', 'STRING', 'TIMER', 'COUNTER']
+};
+
+// Get available tag types for selected vendor
+const getAvailableTagTypes = (vendor: string) => {
+  const supportedTypes = vendorSupportedTypes[vendor as keyof typeof vendorSupportedTypes] || vendorSupportedTypes.rockwell;
+  return tagTypes.filter(type => supportedTypes.includes(type.value));
+};
 
 const vendors = [
   { value: "rockwell", label: "Rockwell" },
@@ -62,11 +87,11 @@ export default function CreateTagModal({
     is_ai_generated: false,
   });
   
-  const [errors, setErrors] = useState<Partial<CreateTagData>>({});
+  const [errors, setErrors] = useState<FormErrors>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const validateForm = () => {
-    const formErrors: Partial<CreateTagData> = {};
+    const formErrors: FormErrors = {};
     
     if (!form.name.trim()) {
       formErrors.name = 'Tag name is required';
@@ -76,8 +101,20 @@ export default function CreateTagModal({
       formErrors.description = 'Description is required';
     }
     
+    // Validate data type is supported by vendor
+    const supportedTypes = vendorSupportedTypes[form.vendor as keyof typeof vendorSupportedTypes] || vendorSupportedTypes.rockwell;
+    if (!supportedTypes.includes(form.type)) {
+      formErrors.type = `Data type '${form.type}' is not supported by ${form.vendor.charAt(0).toUpperCase() + form.vendor.slice(1)}`;
+    }
+    
     if (!form.address.trim()) {
       formErrors.address = 'Address is required';
+    } else {
+      // Validate address format based on vendor
+      const addressValidation = validateAddress(form.address, form.vendor);
+      if (!addressValidation.isValid) {
+        formErrors.address = addressValidation.errorMessage;
+      }
     }
     
     setErrors(formErrors);
@@ -143,9 +180,31 @@ export default function CreateTagModal({
   };
 
   const updateForm = (field: keyof typeof form, value: any) => {
-    setForm(prev => ({ ...prev, [field]: value }));
-    if (errors[field as keyof CreateTagData]) {
+    setForm(prev => {
+      const newForm = { ...prev, [field]: value };
+      
+      // When vendor changes, check if current type is supported
+      if (field === 'vendor') {
+        const supportedTypes = vendorSupportedTypes[value as keyof typeof vendorSupportedTypes] || vendorSupportedTypes.rockwell;
+        if (!supportedTypes.includes(prev.type)) {
+          // Reset to first supported type if current type is not supported
+          newForm.type = supportedTypes[0] as any;
+        }
+      }
+      
+      return newForm;
+    });
+    
+    if (errors[field as keyof FormErrors]) {
       setErrors(prev => ({ ...prev, [field]: undefined }));
+    }
+    
+    // Re-validate address when vendor changes
+    if (field === 'vendor' && form.address) {
+      const addressValidation = validateAddress(form.address, value);
+      if (!addressValidation.isValid) {
+        setErrors(prev => ({ ...prev, address: addressValidation.errorMessage }));
+      }
     }
   };
 
@@ -175,6 +234,18 @@ export default function CreateTagModal({
       }
     >
       <div className="space-y-6">
+        {/* First row: Vendor selection (most important) */}
+        <div>
+          <Dropdown
+            label="Vendor"
+            options={vendors}
+            value={form.vendor}
+            onChange={(value) => updateForm('vendor', value)}
+            required
+          />
+        </div>
+
+        {/* Second row: Tag Name and Address (depends on vendor) */}
         <div className="grid grid-cols-2 gap-4">
           <div>
             <Input
@@ -189,12 +260,18 @@ export default function CreateTagModal({
           <div>
             <Input
               label="Address"
-              placeholder="Enter address (e.g., I:0/0)"
+              placeholder={`Enter ${form.vendor} address`}
               value={form.address}
               onChange={(e) => updateForm('address', e.target.value)}
               error={errors.address}
               required
             />
+            <div className="mt-1 text-xs text-gray-500">
+              <div className="mb-1">{getVendorAddressDescription(form.vendor)}</div>
+              <div>
+                <span className="font-medium">Examples:</span> {getAddressExamples(form.vendor).join(', ')}
+              </div>
+            </div>
           </div>
         </div>
 
@@ -210,22 +287,13 @@ export default function CreateTagModal({
           />
         </div>
 
-        <div className="grid grid-cols-3 gap-4">
+        <div className="grid grid-cols-2 gap-4">
           <div>
             <Dropdown
               label="Data Type"
-              options={tagTypes}
+              options={getAvailableTagTypes(form.vendor)}
               value={form.type}
               onChange={(value) => updateForm('type', value)}
-              required
-            />
-          </div>
-          <div>
-            <Dropdown
-              label="Vendor"
-              options={vendors}
-              value={form.vendor}
-              onChange={(value) => updateForm('vendor', value)}
               required
             />
           </div>

@@ -120,6 +120,15 @@ export default function VendorExportModal({
           // For xlsx, default to CSV for now
           blob = await TagsAPI.exportBeckhoffCsv(projectId);
         }
+      } else if (state.selectedVendor === 'siemens') {
+        if (state.selectedFormat === 'csv') {
+          blob = await TagsAPI.exportSiemensCsv(projectId);
+        } else if (state.selectedFormat === 'xml') {
+          blob = await TagsAPI.exportSiemensXml(projectId);
+        } else {
+          // For xlsx, default to CSV for now
+          blob = await TagsAPI.exportSiemensCsv(projectId);
+        }
       } else if (state.selectedVendor === 'rockwell') {
         if (state.selectedFormat === 'csv') {
           blob = await TagsAPI.exportRockwellCsv(projectId);

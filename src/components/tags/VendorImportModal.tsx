@@ -11,7 +11,7 @@ interface VendorImportModalProps {
   onSuccess?: (importedCount: number) => void;
 }
 
-type Vendor = 'rockwell' | 'beckhoff';
+type Vendor = 'rockwell' | 'beckhoff' | 'siemens';
 type Format = 'csv' | 'xml' | 'l5x';
 
 interface ImportOption {
@@ -27,6 +27,12 @@ const importOptions: ImportOption[] = [
     formats: ['csv', 'l5x'],
     displayName: 'Rockwell (Allen-Bradley)',
     description: 'Import tags from Studio 5000 CSV exports or L5X XML files'
+  },
+  {
+    vendor: 'siemens',
+    formats: ['csv'],
+    displayName: 'Siemens (TIA Portal)',
+    description: 'Import tags from TIA Portal CSV exports'
   },
   {
     vendor: 'beckhoff',
@@ -98,6 +104,10 @@ export default function VendorImportModal({
           result = await TagsAPI.importBeckhoffCsv(projectId, state.selectedFile);
         } else if (state.selectedFormat === 'xml') {
           result = await TagsAPI.importBeckhoffXml(projectId, state.selectedFile);
+        }
+      } else if (state.selectedVendor === 'siemens') {
+        if (state.selectedFormat === 'csv') {
+          result = await TagsAPI.importSiemensCsv(projectId, state.selectedFile);
         }
       } else if (state.selectedVendor === 'rockwell') {
         if (state.selectedFormat === 'csv') {
