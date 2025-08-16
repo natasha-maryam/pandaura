@@ -1,21 +1,36 @@
 import React, { useState } from 'react';
-import { History, ChevronDown, ChevronUp, Eye, RotateCcw, Clock } from 'lucide-react';
+import { History, ChevronDown, ChevronUp, Eye, RotateCcw, Clock, RefreshCw, AlertCircle } from 'lucide-react';
 import { Button, Card } from '../ui';
-import { ProjectVersion } from './types';
+import { ProjectVersion } from '../projects/api';
+import VersionDiffViewer from '../ui/VersionDiffViewer';
 
 interface VersionHistoryProps {
   versions: ProjectVersion[];
-  onViewDiff: (version: ProjectVersion) => void;
+  isLoading?: boolean;
+  error?: string | null;
+  onViewDiff?: (version: ProjectVersion) => void;
   onRollback: (version: ProjectVersion) => void;
+  onRefresh?: () => void;
+  projectId?: number;
 }
 
-export default function VersionHistory({ versions, onViewDiff, onRollback }: VersionHistoryProps) {
+export default function VersionHistory({
+  versions,
+  isLoading = false,
+  error = null,
+  onViewDiff,
+  onRollback,
+  onRefresh,
+  projectId
+}: VersionHistoryProps) {
   const [isExpanded, setIsExpanded] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
   const versionsPerPage = 5;
+  const [diffViewerOpen, setDiffViewerOpen] = useState(false);
+  const [selectedVersions, setSelectedVersions] = useState<{ from: number; to: number } | null>(null);
 
-  // Sort versions by ID descending (newest first)
-  const sortedVersions = [...versions].sort((a, b) => b.id - a.id);
+  // Sort versions by version_number descending (newest first)
+  const sortedVersions = [...versions].sort((a, b) => b.version_number - a.version_number);
   
   // Pagination
   const totalPages = Math.ceil(sortedVersions.length / versionsPerPage);
@@ -54,6 +69,18 @@ export default function VersionHistory({ versions, onViewDiff, onRollback }: Ver
           <span className="text-sm text-muted">({sortedVersions.length} versions)</span>
         </div>
         <div className="flex items-center gap-2">
+          {onRefresh && (
+            <Button
+              size="sm"
+              variant="ghost"
+              icon={RefreshCw}
+              onClick={() => {
+                onRefresh();
+              }}
+              className={`p-1 ${isLoading ? 'animate-spin' : ''}`}
+              title="Refresh version history"
+            />
+          )}
           {isExpanded ? (
             <ChevronUp className="w-4 h-4 text-muted" />
           ) : (
@@ -64,10 +91,32 @@ export default function VersionHistory({ versions, onViewDiff, onRollback }: Ver
       
       {isExpanded && (
         <div className="p-4">
-          {sortedVersions.length === 0 ? (
+          {isLoading ? (
+            <div className="text-center py-8">
+              <RefreshCw className="w-8 h-8 text-muted mx-auto mb-3 animate-spin" />
+              <p className="text-secondary">Loading version history...</p>
+            </div>
+          ) : error ? (
+            <div className="text-center py-8">
+              <AlertCircle className="w-8 h-8 text-red-500 mx-auto mb-3" />
+              <p className="text-red-600 mb-2">Failed to load version history</p>
+              <p className="text-sm text-muted mb-4">{error}</p>
+              {onRefresh && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  icon={RefreshCw}
+                  onClick={onRefresh}
+                >
+                  Try Again
+                </Button>
+              )}
+            </div>
+          ) : sortedVersions.length === 0 ? (
             <div className="text-center py-8">
               <Clock className="w-12 h-12 text-muted mx-auto mb-3" />
               <p className="text-secondary">No version history available</p>
+              <p className="text-sm text-muted mt-2">Versions will appear here as you save your project</p>
             </div>
           ) : (
             <>
@@ -78,15 +127,15 @@ export default function VersionHistory({ versions, onViewDiff, onRollback }: Ver
                     <div
                       key={version.id}
                       className={`flex items-center justify-between p-4 rounded-md border transition-colors ${
-                        isLatest 
-                          ? 'bg-accent-light border-accent' 
+                        isLatest
+                          ? 'bg-accent-light border-accent'
                           : 'bg-background border-light hover:border-accent'
                       }`}
                     >
                       <div className="flex-1">
                         <div className="flex items-center gap-3 mb-2">
                           <span className="font-medium text-primary">
-                            Version {version.id}
+                            Version {version.version_number}
                           </span>
                           {isLatest && (
                             <span className="bg-accent text-white text-xs px-2 py-0.5 rounded-full">
@@ -94,43 +143,59 @@ export default function VersionHistory({ versions, onViewDiff, onRollback }: Ver
                             </span>
                           )}
                           <span className={`px-2 py-0.5 rounded text-xs font-medium ${
-                            version.type === 'Autosave' 
+                            version.is_auto
                               ? 'bg-blue-100 text-blue-700 border border-blue-200'
                               : 'bg-green-100 text-green-700 border border-green-200'
                           }`}>
-                            {version.type}
+                            {version.is_auto ? 'Auto-save' : 'Manual'}
                           </span>
                         </div>
                         <div className="text-sm text-secondary mb-1">
-                          <span className="font-medium">{version.user}</span> • {formatTimestamp(version.timestamp)}
+                          <span className="font-medium">User {version.user_id}</span> • {formatTimestamp(version.created_at)}
                         </div>
                         {version.message && (
                           <p className="text-sm text-muted">{version.message}</p>
                         )}
-                        {version.changes && version.changes.length > 0 && (
-                          <div className="flex items-center gap-4 text-xs text-muted mt-2">
-                            <span className="text-green-600">
-                              +{version.changes.reduce((sum, change) => sum + change.linesAdded, 0)} lines
-                            </span>
-                            <span className="text-red-600">
-                              -{version.changes.reduce((sum, change) => sum + change.linesRemoved, 0)} lines
-                            </span>
-                            <span>
-                              {version.changes.length} file{version.changes.length !== 1 ? 's' : ''} changed
-                            </span>
-                          </div>
-                        )}
+                        <div className="flex items-center gap-4 text-xs text-muted mt-2">
+                          <span>
+                            Created {new Date(version.created_at).toLocaleDateString()}
+                          </span>
+                        </div>
                       </div>
                       <div className="flex items-center gap-2 ml-4">
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          icon={Eye}
-                          onClick={() => onViewDiff(version)}
-                          title="View Changes"
-                        >
-                          View
-                        </Button>
+                        {/* Compare with previous version */}
+                        {index < sortedVersions.length - 1 && projectId && (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            icon={Eye}
+                            onClick={() => {
+                              const previousVersion = sortedVersions[index + 1];
+                              setSelectedVersions({
+                                from: previousVersion.version_number,
+                                to: version.version_number
+                              });
+                              setDiffViewerOpen(true);
+                            }}
+                            title="Compare with previous version"
+                          >
+                            Diff
+                          </Button>
+                        )}
+
+                        {/* Legacy view diff handler */}
+                        {onViewDiff && (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            icon={Eye}
+                            onClick={() => onViewDiff(version)}
+                            title="View Changes"
+                          >
+                            View
+                          </Button>
+                        )}
+
                         {!isLatest && (
                           <Button
                             size="sm"
@@ -191,6 +256,20 @@ export default function VersionHistory({ versions, onViewDiff, onRollback }: Ver
             </>
           )}
         </div>
+      )}
+
+      {/* Version Diff Viewer */}
+      {projectId && selectedVersions && (
+        <VersionDiffViewer
+          projectId={projectId}
+          fromVersion={selectedVersions.from}
+          toVersion={selectedVersions.to}
+          isOpen={diffViewerOpen}
+          onClose={() => {
+            setDiffViewerOpen(false);
+            setSelectedVersions(null);
+          }}
+        />
       )}
     </Card>
   );

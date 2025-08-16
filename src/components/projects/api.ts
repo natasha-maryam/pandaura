@@ -31,6 +31,26 @@ export interface UpdateProjectData {
   targetPLCVendor?: 'siemens' | 'rockwell' | 'beckhoff';
 }
 
+// Version Control Types
+export interface ProjectVersion {
+  id: number;
+  version_number: number;
+  user_id: string;
+  created_at: string;
+  message?: string;
+  is_auto?: boolean;
+  snapshot_info: {
+    has_autosave: boolean;
+    project_name: string;
+    timestamp: number;
+  };
+}
+
+export interface CreateVersionData {
+  state: any;
+  message?: string;
+}
+
 export interface ApiResponse<T> {
   success: boolean;
   message?: string;
@@ -248,15 +268,174 @@ export class ProjectsAPI {
   static async checkProjectOwnership(projectId: number): Promise<boolean> {
     try {
       const response = await api.get<ApiResponse<never>>(`/projects/${projectId}/ownership`);
-      
+
       if (!response.data.success) {
         return false;
       }
-      
+
       return response.data.isOwner || false;
     } catch (error: any) {
       console.error('Ownership check failed:', error.response?.data?.error || error.message);
       return false;
+    }
+  }
+
+  // ===== VERSION CONTROL METHODS =====
+
+  /**
+   * Get version history for a project
+   */
+  static async getVersionHistory(projectId: number): Promise<ProjectVersion[]> {
+    try {
+      const response = await api.get<{ success: boolean; versions: ProjectVersion[] }>(`/versions/projects/${projectId}/versions`);
+      return response.data.versions || [];
+    } catch (error: any) {
+      if (error.response?.data?.error) {
+        throw new Error(error.response.data.error);
+      }
+      throw error;
+    }
+  }
+
+  /**
+   * Create a new version (manual save with message)
+   */
+  static async createVersion(projectId: number, data: CreateVersionData): Promise<number> {
+    try {
+      const response = await api.post<{ success: boolean; versionId: number }>(`/versions/projects/${projectId}/versions`, data);
+
+      if (!response.data.success) {
+        throw new Error('Failed to create version');
+      }
+
+      return response.data.versionId;
+    } catch (error: any) {
+      if (error.response?.data?.error) {
+        throw new Error(error.response.data.error);
+      }
+      throw error;
+    }
+  }
+
+  /**
+   * Get specific version data
+   */
+  static async getVersion(projectId: number, versionNumber: number): Promise<any> {
+    try {
+      // Get version history and find the specific version
+      const versions = await this.getVersionHistory(projectId);
+      const version = versions.find(v => v.version_number === versionNumber);
+
+      if (!version) {
+        throw new Error(`Version ${versionNumber} not found`);
+      }
+
+      return version.snapshot_info;
+    } catch (error: any) {
+      if (error.response?.data?.error) {
+        throw new Error(error.response.data.error);
+      }
+      throw error;
+    }
+  }
+
+  /**
+   * Rollback project to a specific version (Enhanced)
+   */
+  static async rollbackToVersion(projectId: number, versionNumber: number): Promise<{ rolledBackTo: number; newVersion: number }> {
+    try {
+      const response = await api.post<{ 
+        success: boolean; 
+        rolledBackTo: number; 
+        newVersion: number;
+        message: string;
+      }>(`/versions/projects/${projectId}/version/${versionNumber}/rollback`);
+
+      if (!response.data.success) {
+        throw new Error('Failed to rollback to version');
+      }
+
+      return {
+        rolledBackTo: response.data.rolledBackTo,
+        newVersion: response.data.newVersion
+      };
+    } catch (error: any) {
+      if (error.response?.data?.error) {
+        throw new Error(error.response.data.error);
+      }
+      throw error;
+    }
+  }
+
+  /**
+   * Create a new project version snapshot
+   */
+  static async createVersionSnapshot(projectId: number, message?: string, isAuto: boolean = false): Promise<number> {
+    try {
+      const response = await api.post<{ success: boolean; version: number }>(`/versions/projects/${projectId}/version`, {
+        message,
+        isAuto
+      });
+
+      if (!response.data.success) {
+        throw new Error('Failed to create version snapshot');
+      }
+
+      return response.data.version;
+    } catch (error: any) {
+      if (error.response?.data?.error) {
+        throw new Error(error.response.data.error);
+      }
+      throw error;
+    }
+  }
+
+  /**
+   * Get full version snapshot data
+   */
+  static async getVersionSnapshot(projectId: number, versionNumber: number): Promise<any> {
+    try {
+      const response = await api.get<{ success: boolean; data: any }>(`/versions/projects/${projectId}/version/${versionNumber}`);
+
+      if (!response.data.success) {
+        throw new Error('Failed to get version snapshot');
+      }
+
+      return response.data.data;
+    } catch (error: any) {
+      if (error.response?.data?.error) {
+        throw new Error(error.response.data.error);
+      }
+      throw error;
+    }
+  }
+
+  /**
+   * Create auto-save version (used by autosave system)
+   */
+  static async createAutoSaveVersion(projectId: number, state: any): Promise<void> {
+    try {
+      const response = await api.post<{ success: boolean }>(`/versions/projects/${projectId}/auto-save`, { state });
+
+      if (!response.data.success) {
+        throw new Error('Auto-save version creation failed');
+      }
+    } catch (error: any) {
+      // Auto-save failures should be logged but not throw errors
+      console.error('Auto-save version creation failed:', error.response?.data?.error || error.message);
+    }
+  }
+
+  /**
+   * Get latest auto-save state
+   */
+  static async getLatestAutoSave(projectId: number): Promise<any | null> {
+    try {
+      const response = await api.get<{ state: any; timestamp: number } | null>(`/versions/projects/${projectId}/auto-save`);
+      return response.data;
+    } catch (error: any) {
+      console.error('Failed to get latest auto-save:', error.response?.data?.error || error.message);
+      return null;
     }
   }
 }

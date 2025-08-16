@@ -1,10 +1,14 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { ChevronLeft, ArrowRight, Activity, Save, Clock, AlertCircle } from 'lucide-react';
 import { Button, Card } from '../ui';
-import { Project, ProjectVersion } from './types';
+import { Project } from './types';
+import { ProjectVersion } from './api';
 import { useProject } from './hooks';
+import { useVersionControl } from '../../hooks/useVersionControl';
 import VersionHistory from './VersionHistory';
 import VersionDiffModal from './VersionDiffModal';
+import ErrorBoundary from '../ErrorBoundary';
+
 import { getStatusColor, getVendorColor, getClientColor } from './colors';
 
 interface ProjectOverviewProps {
@@ -13,56 +17,65 @@ interface ProjectOverviewProps {
   onOpenWorkspace: (project: Project) => void;
 }
 
-export default function ProjectOverview({ project, onBack, onOpenWorkspace }: ProjectOverviewProps) {
-  const [selectedVersion, setSelectedVersion] = useState<ProjectVersion | null>(null);
+// Wrap the component with error boundary
+export default function ProjectOverviewWrapper(props: ProjectOverviewProps) {
+  return (
+    <ErrorBoundary>
+      <ProjectOverviewContent {...props} />
+    </ErrorBoundary>
+  );
+}
+
+function ProjectOverviewContent({ project, onBack, onOpenWorkspace }: ProjectOverviewProps) {
+  // ========================================
+  // ALL HOOKS MUST BE CALLED FIRST - NO CONDITIONAL LOGIC ABOVE HOOKS
+  // ========================================
+  
+  // State hooks - always called
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
   const [showSaveConfirm, setShowSaveConfirm] = useState(false);
+  const [selectedVersionForDiff, setSelectedVersionForDiff] = useState<ProjectVersion | null>(null);
   
-  // Use the project hook for real-time data and auto-save
+  // Custom hooks - always called (even if project is null)
   const {
     project: liveProject,
-    isLoading,
-    error,
+    isLoading: projectLoading,
+    error: projectError,
     isDirty,
     lastSaved,
     autosave,
     save,
     markDirty
-  } = useProject(project.id);
+  } = useProject(project?.id || 0); // Use 0 as fallback to ensure hook is always called
 
-  // Auto-save interval (every 30 seconds if there are changes)
-  useEffect(() => {
-    if (!isDirty) return;
+  const {
+    versions: realVersions,
+    isLoading: versionsLoading,
+    error: versionsError,
+    rollbackToVersion,
+    refreshVersions
+  } = useVersionControl({ 
+    projectId: project?.id || 0, // Use 0 as fallback to ensure hook is always called
+    autoCreateVersions: true 
+  });
 
-    const autoSaveTimer = setTimeout(async () => {
-      const projectState = {
-        currentView: 'overview',
-        lastActivity: new Date().toISOString(),
-        hasUnsavedChanges: hasUnsavedChanges
-      };
-      
-      await autosave(projectState);
-      console.log('Auto-saved project state');
-    }, 30000); // 30 seconds
-
-    return () => clearTimeout(autoSaveTimer);
-  }, [isDirty, hasUnsavedChanges, autosave]);
-
-  // Handle beforeunload to prompt for unsaved changes
-  useEffect(() => {
-    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
-      if (hasUnsavedChanges || isDirty) {
-        e.preventDefault();
-        e.returnValue = 'You have unsaved changes. Are you sure you want to leave?';
-        return e.returnValue;
-      }
+  // Memoization hooks - always called
+  const { safeVersions, recentActivity } = useMemo(() => {
+    const versions = realVersions || [];
+    return {
+      safeVersions: versions,
+      recentActivity: versions.slice(0, 5).map(version => ({
+        action: version.is_auto ? 'Auto-saved project' : 'Manually saved version',
+        user: `User ${version.user_id}`,
+        timestamp: new Date(version.created_at).toLocaleString(),
+        details: version.message || `Version ${version.version_number} created`
+      }))
     };
+  }, [realVersions]);
 
-    window.addEventListener('beforeunload', handleBeforeUnload);
-    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
-  }, [hasUnsavedChanges, isDirty]);
-
-  const handleSaveProject = async () => {
+  // Callback hooks - always called
+  const handleSaveProject = useCallback(async () => {
+    if (!save) return; // Guard clause but hook is still called
     try {
       const projectState = {
         currentView: 'overview',
@@ -78,40 +91,108 @@ export default function ProjectOverview({ project, onBack, onOpenWorkspace }: Pr
     } catch (error) {
       console.error('Failed to save project:', error);
     }
-  };
+  }, [save]);
 
-  const handleOpenWorkspace = () => {
+  const handleOpenWorkspace = useCallback(() => {
     if (hasUnsavedChanges || isDirty) {
       setShowSaveConfirm(true);
     } else {
       onOpenWorkspace(project);
     }
-  };
+  }, [hasUnsavedChanges, isDirty, onOpenWorkspace, project]);
 
-  const handleConfirmOpenWorkspace = () => {
+  const handleConfirmOpenWorkspace = useCallback(() => {
     setShowSaveConfirm(false);
     onOpenWorkspace(project);
-  };
+  }, [onOpenWorkspace, project]);
 
-  const handleViewDiff = (version: ProjectVersion) => {
-    setSelectedVersion(version);
-  };
+  const handleViewDiff = useCallback((version: ProjectVersion) => {
+    setSelectedVersionForDiff(version);
+  }, []);
 
-  const handleRollback = (version: ProjectVersion) => {
-    // In real app, make API call here
-    console.log('Rolling back to version:', version.id);
-    setHasUnsavedChanges(true);
-    markDirty();
-    // Show success toast, refresh project data, etc.
-  };
+  const handleRollback = useCallback(async (version: ProjectVersion) => {
+    if (!rollbackToVersion) return; // Guard clause but hook is still called
+    try {
+      console.log('Rolling back to version:', version.version_number);
+      await rollbackToVersion(version.version_number);
+      console.log('Rollback completed successfully');
+    } catch (error) {
+      console.error('Rollback failed:', error);
+      // Show error in a toast or notification instead of alert
+      const errorMessage = error instanceof Error ? error.message : 'Failed to rollback to version. Please try again.';
+      // You can dispatch a toast notification here if you have a toast system
+      console.error(errorMessage);
+    }
+  }, [rollbackToVersion]);
 
-  const handleExportVersion = (version: ProjectVersion) => {
-    // In real app, make API call to export version
-    console.log('Exporting version:', version.id);
-    // Show success toast, download file, etc.
-  };
+  // Effect hooks - always called
+  useEffect(() => {
+    if (!isDirty || !autosave) {
+      return; // Early return in effect is OK
+    }
 
-  if (isLoading) {
+    const autoSaveTimer = setTimeout(async () => {
+      const projectState = {
+        currentView: 'overview',
+        lastActivity: new Date().toISOString(),
+        hasUnsavedChanges: hasUnsavedChanges
+      };
+
+      await autosave(projectState);
+      console.log('Auto-saved project state');
+    }, 30000);
+
+    return () => clearTimeout(autoSaveTimer);
+  }, [isDirty, hasUnsavedChanges, autosave]);
+
+  useEffect(() => {
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      if (hasUnsavedChanges || isDirty) {
+        e.preventDefault();
+        e.returnValue = 'You have unsaved changes. Are you sure you want to leave?';
+        return e.returnValue;
+      }
+    };
+
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+  }, [hasUnsavedChanges, isDirty]);
+
+  useEffect(() => {
+    if (!project?.id) return; // Early return in effect is OK
+    
+    console.log('Project Overview - Version Control Debug:', {
+      projectId: project.id,
+      versionsLoading,
+      versionsError,
+      versionsCount: safeVersions.length,
+      versions: safeVersions,
+      recentActivityCount: recentActivity.length
+    });
+  }, [project?.id, versionsLoading, versionsError, safeVersions, recentActivity]);
+
+  // ========================================
+  // NOW WE CAN SAFELY DO CONDITIONAL RENDERING
+  // ========================================
+
+  // Check if project exists
+  if (!project) {
+    return (
+      <div className="max-w-4xl mx-auto px-6 py-8">
+        <div className="text-center py-12 bg-red-50 rounded-lg border border-red-200">
+          <AlertCircle className="w-8 h-8 text-red-500 mx-auto mb-4" />
+          <h3 className="text-lg font-medium text-red-700 mb-2">No Project Selected</h3>
+          <p className="text-red-600 mb-4">No project data was provided.</p>
+          <Button onClick={onBack}>
+            Back to Projects
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
+  // Check loading state
+  if (projectLoading) {
     return (
       <div className="max-w-4xl mx-auto px-6 py-8">
         <div className="text-center py-12">
@@ -122,13 +203,14 @@ export default function ProjectOverview({ project, onBack, onOpenWorkspace }: Pr
     );
   }
 
-  if (error) {
+  // Check error state
+  if (projectError) {
     return (
       <div className="max-w-4xl mx-auto px-6 py-8">
         <div className="text-center py-12 bg-red-50 rounded-lg border border-red-200">
           <AlertCircle className="w-8 h-8 text-red-500 mx-auto mb-4" />
           <h3 className="text-lg font-medium text-red-700 mb-2">Failed to load project</h3>
-          <p className="text-red-600 mb-4">{error}</p>
+          <p className="text-red-600 mb-4">{projectError}</p>
           <Button onClick={() => window.location.reload()}>
             Try Again
           </Button>
@@ -281,12 +363,18 @@ export default function ProjectOverview({ project, onBack, onOpenWorkspace }: Pr
           </Button>
         </div>
 
+
+
         <div className="grid gap-6">
           {/* Version History */}
           <VersionHistory
-            versions={displayProject.versions}
+            versions={safeVersions}
+            isLoading={versionsLoading}
+            error={versionsError}
+            projectId={project.id}
             onViewDiff={handleViewDiff}
             onRollback={handleRollback}
+            onRefresh={refreshVersions}
           />
 
           {/* Recent Activity */}
@@ -296,14 +384,20 @@ export default function ProjectOverview({ project, onBack, onOpenWorkspace }: Pr
               <h3 className="font-semibold text-primary">Recent Activity</h3>
             </div>
             <div className="p-4">
-              {displayProject.recentActivity.length === 0 ? (
+              {versionsLoading ? (
+                <div className="text-center py-8">
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500 mx-auto mb-2"></div>
+                  <p className="text-secondary">Loading recent activity...</p>
+                </div>
+              ) : recentActivity.length === 0 ? (
                 <div className="text-center py-8">
                   <Activity className="w-12 h-12 text-muted mx-auto mb-3" />
                   <p className="text-secondary">No recent activity</p>
+                  <p className="text-xs text-muted mt-1">Activity will appear here as you work on the project</p>
                 </div>
               ) : (
                 <div className="space-y-3">
-                  {displayProject.recentActivity.map((activity, index) => (
+                  {recentActivity.map((activity, index) => (
                     <div
                       key={index}
                       className="flex items-start gap-3 p-3 bg-background rounded-md"
@@ -329,10 +423,12 @@ export default function ProjectOverview({ project, onBack, onOpenWorkspace }: Pr
 
       {/* Version Diff Modal */}
       <VersionDiffModal
-        version={selectedVersion}
-        onClose={() => setSelectedVersion(null)}
-        onRollback={handleRollback}
-        onExport={handleExportVersion}
+        version={selectedVersionForDiff}
+        onClose={() => setSelectedVersionForDiff(null)}
+        onRollback={(version) => {
+          handleRollback(version);
+          setSelectedVersionForDiff(null);
+        }}
       />
     </>
   );

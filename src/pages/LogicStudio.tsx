@@ -11,7 +11,10 @@ import { useModuleState } from "../contexts/ModuleStateContext";
 import { useTagSyncOnly, useProjectSync } from "../contexts/ProjectSyncContext";
 import { useProjectAutosave } from "../components/projects/hooks";
 import { useProjectNavigationProtection } from "../hooks/useNavigationProtection";
+import { useVersionControl } from "../hooks/useVersionControl";
 import AutosaveStatus from "../components/ui/AutosaveStatus";
+import VersionControlToolbar from "../components/ui/VersionControlToolbar";
+import VersionControlDebug from "../components/debug/VersionControlDebug";
 import { tagsToSTCodeWithScopes } from "../utils/tagToSTConverter";
 import { RefreshCw } from "lucide-react";
 
@@ -241,6 +244,104 @@ END_PROGRAM`);
     }
   }, [sessionMode, projectId, updateProjectState, prompt, editorCode, vendor, showPendingChanges, showAISuggestions, vendorContextEnabled, isCollapsed, collapseLevel]);
 
+  // Version control for rollback functionality
+  const { getVersionData } = useVersionControl({
+    projectId: projectId || 0,
+    autoCreateVersions: false
+  });
+
+  // Listen for enhanced rollback events and restore state
+  useEffect(() => {
+    const handleRollback = async (event: Event) => {
+      const customEvent = event as CustomEvent;
+      const { projectId: rolledProjectId, targetVersion, rolledBackTo } = customEvent.detail;
+
+      if (rolledProjectId === projectId) {
+        console.log('Logic Studio: Handling enhanced rollback to version', rolledBackTo);
+
+        try {
+          // Get the version snapshot data using new API
+          const versionSnapshot = await ProjectsAPI.getVersionSnapshot(projectId, rolledBackTo);
+
+          if (versionSnapshot && versionSnapshot.autosaveState) {
+            const autosaveState = versionSnapshot.autosaveState;
+            
+            // Check if this autosave state contains LogicStudio data
+            if (autosaveState.module === 'LogicStudio') {
+              // Restore Logic Studio state from the enhanced snapshot
+              setPrompt(autosaveState.prompt || '');
+              setEditorCode(autosaveState.editorCode || '');
+              setVendor(autosaveState.vendor || 'siemens');
+              setShowPendingChanges(autosaveState.showPendingChanges || false);
+              setShowAISuggestions(autosaveState.showAISuggestions || false);
+              setVendorContextEnabled(autosaveState.vendorContextEnabled || false);
+              setIsCollapsed(autosaveState.isCollapsed || false);
+              setCollapseLevel(autosaveState.collapseLevel || 0);
+
+              console.log('Logic Studio state restored from enhanced version snapshot', rolledBackTo);
+            }
+          }
+
+          // Also check if there are module-specific states in the snapshot
+          if (versionSnapshot && versionSnapshot.moduleStates && versionSnapshot.moduleStates.LogicStudio) {
+            const moduleState = versionSnapshot.moduleStates.LogicStudio;
+            
+            setPrompt(moduleState.prompt || '');
+            setEditorCode(moduleState.editorCode || '');
+            setVendor(moduleState.vendor || 'siemens');
+            setShowPendingChanges(moduleState.showPendingChanges || false);
+            setShowAISuggestions(moduleState.showAISuggestions || false);
+            setVendorContextEnabled(moduleState.vendorContextEnabled || false);
+            setIsCollapsed(moduleState.isCollapsed || false);
+            setCollapseLevel(moduleState.collapseLevel || 0);
+
+            console.log('Logic Studio state restored from module-specific state in version', rolledBackTo);
+          }
+
+        } catch (error) {
+          console.error('Failed to restore Logic Studio state from enhanced version:', error);
+          // Fallback to legacy method
+          try {
+            const versionData = await getVersionData(rolledBackTo);
+            if (versionData && versionData.module === 'LogicStudio') {
+              setPrompt(versionData.prompt || '');
+              setEditorCode(versionData.editorCode || '');
+              setVendor(versionData.vendor || 'siemens');
+              setShowPendingChanges(versionData.showPendingChanges || false);
+              setShowAISuggestions(versionData.showAISuggestions || false);
+              setVendorContextEnabled(versionData.vendorContextEnabled || false);
+              setIsCollapsed(versionData.isCollapsed || false);
+              setCollapseLevel(versionData.collapseLevel || 0);
+              console.log('Logic Studio state restored using legacy method');
+            }
+          } catch (legacyError) {
+            console.error('Legacy restore method also failed:', legacyError);
+          }
+        }
+      }
+    };
+
+    // Also listen for general project state changes
+    const handleProjectStateChange = (event: Event) => {
+      const customEvent = event as CustomEvent;
+      const { projectId: changedProjectId, action } = customEvent.detail;
+
+      if (changedProjectId === projectId && action === 'rollback') {
+        console.log('Logic Studio: Project state changed due to rollback, refreshing...');
+        // Force a refresh of the current state
+        window.location.reload();
+      }
+    };
+
+    window.addEventListener('pandaura:project-rollback', handleRollback);
+    window.addEventListener('pandaura:project-state-changed', handleProjectStateChange);
+    
+    return () => {
+      window.removeEventListener('pandaura:project-rollback', handleRollback);
+      window.removeEventListener('pandaura:project-state-changed', handleProjectStateChange);
+    };
+  }, [projectId, getVersionData]);
+
   // Fallback to module state for session mode
   const debouncedSave = useCallback(
     (() => {
@@ -408,6 +509,34 @@ END_PROGRAM`;
               hasUnsavedChanges={hasUnsavedChanges}
               onManualSave={saveNow}
               className="text-xs"
+            />
+          )}
+
+          {/* Version Control Toolbar */}
+          {!sessionMode && projectId && (
+            <VersionControlToolbar
+              projectId={projectId}
+              currentState={{
+                module: 'LogicStudio',
+                prompt,
+                editorCode,
+                vendor,
+                showPendingChanges,
+                showAISuggestions,
+                vendorContextEnabled,
+                isCollapsed,
+                collapseLevel,
+                lastActivity: new Date().toISOString()
+              }}
+              onVersionCreated={(versionNumber) => {
+                console.log('Version created in Logic Studio:', versionNumber);
+              }}
+              onRollback={(versionNumber) => {
+                console.log('Rollback completed in Logic Studio:', versionNumber);
+                // Refresh the page or reload state after rollback
+                window.location.reload();
+              }}
+              className="border-l border-gray-200 pl-3"
             />
           )}
 
@@ -731,6 +860,13 @@ END_PROGRAM`;
       
       {/* AI Action Buttons - Hidden in minimal mode */}
       {collapseLevel < 2 && <AIActionButtons />}
+
+      {/* Debug Component - Temporary */}
+      {!sessionMode && projectId && (
+        <div className="mt-4">
+          <VersionControlDebug projectId={projectId} />
+        </div>
+      )}
 
       {/* Vendor selection removed - now uses project vendor automatically */}
     </div>

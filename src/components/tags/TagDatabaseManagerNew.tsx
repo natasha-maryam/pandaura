@@ -1,29 +1,14 @@
-import React, { useState, useEffect, useRef, useCallback } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import {  ChevronDown, Bot, Edit, Trash2, Plus, Check, X, RefreshCw, AlertTriangle, Upload, Download, Wifi, WifiOff, Clock } from "lucide-react";
+import {  ChevronDown, Bot, Edit, Trash2, Plus, Check, X, RefreshCw, AlertTriangle } from "lucide-react";
 
 import { TagsProvider, useTags } from "./context";
 import { TagsAPI, Tag, CreateTagData } from "./api";
 import { ProjectsAPI, Project } from "../projects/api";
 import CreateTagModal from "./CreateTagModal";
-import VendorExportModal from "./VendorExportModal";
-import VendorImportModal from "./VendorImportModal";
 import { useToast } from "../ui/Toast";
 import Modal from "../ui/Modal";
 import Button from "../ui/Button";
-import { useTagSyncOnly } from "../../contexts/ProjectSyncContext";
-import { TagSyncResponse } from "../../hooks/useTagSync";
-import { useProjectAutosave } from "../projects/hooks";
-import AutosaveStatus from "../ui/AutosaveStatus";
-import { 
-  validateTagTypeForVendor, 
-  validateAddressForVendor, 
-  getAvailableTagTypes, 
-  getInvalidTypeMessage, 
-  getInvalidAddressMessage,
-  type Vendor,
-  type TagType 
-} from "../../utils/vendorValidation";
 
 interface TagDatabaseManagerProps {
   sessionMode?: boolean;
@@ -52,18 +37,6 @@ const TagDatabaseManagerContent: React.FC<TagDatabaseManagerProps> = ({ sessionM
     refreshTags
   } = useTags();
 
-  // Real-time tag sync
-  const {
-    isConnected,
-    isConnecting,
-    lastError: syncError,
-    lastSyncTime,
-    queuedSyncs,
-    latestTags,
-    onTagsUpdated,
-    offTagsUpdated
-  } = useTagSyncOnly();
-
   const [showVendorDropdown, setShowVendorDropdown] = useState(false);
   const [editingTag, setEditingTag] = useState<string | null>(null);
   const [currentProjectId, setCurrentProjectId] = useState<number | null>(null);
@@ -73,79 +46,8 @@ const TagDatabaseManagerContent: React.FC<TagDatabaseManagerProps> = ({ sessionM
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [tagToDelete, setTagToDelete] = useState<Tag | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
-  const [showVendorExportModal, setShowVendorExportModal] = useState(false);
-  const [showVendorImportModal, setShowVendorImportModal] = useState(false);
-  const [currentProject, setCurrentProject] = useState<Project | null>(null);
-  const [lastRealTimeUpdate, setLastRealTimeUpdate] = useState<number | null>(null);
-
+  
   const vendorDropdownRef = useRef<HTMLDivElement>(null);
-
-  // Enhanced autosave for tag management state
-  const {
-    projectState: tagManagerState,
-    updateProjectState: updateTagManagerState,
-    isSaving: isAutosaving,
-    lastSaved: lastAutosaved,
-    saveError: autosaveError,
-    hasUnsavedChanges: hasUnsavedTagChanges,
-    saveNow: saveTagManagerState
-  } = useProjectAutosave(currentProjectId || 0, {
-    module: 'TagManager',
-    filters,
-    editingTag,
-    lastActivity: new Date().toISOString(),
-    lastRealTimeUpdate
-  });
-
-  // Handle real-time tag updates from WebSocket
-  const handleRealTimeTagUpdate = useCallback((response: TagSyncResponse) => {
-    if (response.type === 'tags_updated' && response.success && response.tags) {
-      console.log(`📡 Received real-time tag update: ${response.tags.length} tags`);
-      setLastRealTimeUpdate(Date.now());
-
-      // Refresh tags to get the latest data
-      if (currentProjectId) {
-        refreshTags();
-      }
-
-      // Update autosave state
-      updateTagManagerState({
-        module: 'TagManager',
-        filters,
-        editingTag,
-        lastActivity: new Date().toISOString(),
-        lastRealTimeUpdate: Date.now(),
-        tagsCount: response.tags.length
-      });
-
-      showToast({
-        variant: 'success',
-        title: 'Tags Updated',
-        message: `${response.parsedCount || response.tags.length} tags synced from Logic Studio`
-      });
-    }
-  }, [currentProjectId, refreshTags, showToast, updateTagManagerState, filters, editingTag]);
-
-  // Update autosave state when filters or editing state changes
-  useEffect(() => {
-    if (currentProjectId) {
-      updateTagManagerState({
-        module: 'TagManager',
-        filters,
-        editingTag,
-        lastActivity: new Date().toISOString(),
-        lastRealTimeUpdate
-      });
-    }
-  }, [currentProjectId, updateTagManagerState, filters, editingTag, lastRealTimeUpdate]);
-
-  // Subscribe to real-time tag updates
-  useEffect(() => {
-    onTagsUpdated(handleRealTimeTagUpdate);
-    return () => {
-      offTagsUpdated(handleRealTimeTagUpdate);
-    };
-  }, [handleRealTimeTagUpdate, onTagsUpdated, offTagsUpdated]);
 
   // Close dropdowns when clicking outside
   useEffect(() => {
@@ -205,23 +107,9 @@ const TagDatabaseManagerContent: React.FC<TagDatabaseManagerProps> = ({ sessionM
     }
   };
 
-  // Load current project details
-  const loadCurrentProject = async (projectId: number) => {
-    try {
-      const projects = await ProjectsAPI.getProjects();
-      const project = projects.find(p => p.id === projectId);
-      if (project) {
-        setCurrentProject(project);
-      }
-    } catch (error) {
-      console.error('Failed to load current project:', error);
-    }
-  };
-
   // Handle project selection
   const handleProjectSelect = (project: Project) => {
     setCurrentProjectId(project.id);
-    setCurrentProject(project);
     localStorage.setItem('currentProjectId', project.id.toString());
     setFilters({ projectId: project.id });
     
@@ -235,10 +123,6 @@ const TagDatabaseManagerContent: React.FC<TagDatabaseManagerProps> = ({ sessionM
   useEffect(() => {
     if (currentProjectId) {
       fetchTags({ projectId: currentProjectId });
-      // Also load project details if we don't have them
-      if (!currentProject) {
-        loadCurrentProject(currentProjectId);
-      }
     }
   }, [currentProjectId]); // Remove fetchTags from dependencies to prevent infinite loop
 
@@ -256,59 +140,9 @@ const TagDatabaseManagerContent: React.FC<TagDatabaseManagerProps> = ({ sessionM
 
   const handleEditTag = async (tagId: string, field: keyof Tag, value: any) => {
     try {
-      // Get the current tag to access vendor information
-      const tag = tags.find(t => t.id === tagId);
-      if (!tag) {
-        throw new Error('Tag not found');
-      }
-
-      // Validate vendor-specific constraints
-      if (field === 'type') {
-        const isValidType = validateTagTypeForVendor(value as TagType, tag.vendor as Vendor);
-        if (!isValidType) {
-          const errorMessage = getInvalidTypeMessage(value as TagType, tag.vendor as Vendor);
-          showToast({
-            variant: 'error',
-            title: 'Invalid Data Type',
-            message: errorMessage,
-            duration: 5000
-          });
-          return; // Don't proceed with the update
-        }
-      }
-      
-      if (field === 'address') {
-        const isValidAddress = validateAddressForVendor(value, tag.vendor as Vendor);
-        if (!isValidAddress) {
-          const errorMessage = getInvalidAddressMessage(value, tag.vendor as Vendor);
-          showToast({
-            variant: 'error',
-            title: 'Invalid Address Format',
-            message: errorMessage,
-            duration: 5000
-          });
-          return; // Don't proceed with the update
-        }
-      }
-      
       await updateTag(tagId, { [field]: value });
-      
-      // Show success message for successful updates
-      showToast({
-        variant: 'success',
-        title: 'Tag Updated',
-        message: `${field} updated successfully`,
-        duration: 3000
-      });
     } catch (error) {
       console.error('Error updating tag:', error);
-      const errorMessage = error instanceof Error ? error.message : 'Failed to update tag';
-      showToast({
-        variant: 'error',
-        title: 'Update Failed',
-        message: errorMessage,
-        duration: 5000
-      });
     }
   };
 
@@ -413,49 +247,9 @@ const TagDatabaseManagerContent: React.FC<TagDatabaseManagerProps> = ({ sessionM
     }
   };
 
-  const handleExportButtonClick = () => {
-    if (!currentProjectId) {
-      showToast({
-        variant: 'error',
-        message: 'Please select a project first'
-      });
-      return;
-    }
-
-    setShowVendorExportModal(true);
-    setShowVendorDropdown(false);
-  };
-
-  const handleImportButtonClick = () => {
-    if (!currentProjectId) {
-      showToast({
-        variant: 'error',
-        title: 'No Project Selected',
-        message: 'Please select a project first before importing tags.',
-        duration: 3000
-      });
-      return;
-    }
-    setShowVendorImportModal(true);
-  };
-
-  const handleImportSuccess = (importedCount: number) => {
-    showToast({
-      variant: 'success',
-      title: 'Import Successful',
-      message: `Successfully imported ${importedCount} tags.`,
-      duration: 5000
-    });
-    // Refresh the tags list to show newly imported tags
-    refreshTags();
-  };
-
   const handleExport = async (format: string) => {
     if (!currentProjectId) {
-      showToast({
-        variant: 'error',
-        message: 'Please select a project first'
-      });
+      alert('Please select a project first');
       return;
     }
 
@@ -465,17 +259,11 @@ const TagDatabaseManagerContent: React.FC<TagDatabaseManagerProps> = ({ sessionM
         format
       });
       
-      showToast({
-        variant: 'success',
-        message: result.message
-      });
+      alert(result.message);
       setShowVendorDropdown(false);
     } catch (error) {
       console.error('Error exporting tags:', error);
-      showToast({
-        variant: 'error',
-        message: 'Failed to export tags: ' + (error instanceof Error ? error.message : 'Unknown error')
-      });
+      alert('Failed to export tags: ' + (error instanceof Error ? error.message : 'Unknown error'));
     }
   };
 
@@ -561,58 +349,17 @@ const TagDatabaseManagerContent: React.FC<TagDatabaseManagerProps> = ({ sessionM
         <>
           {/* Sticky Top Bar */}
           <div className="sticky top-0 z-30 bg-white border-b border-light px-6 py-4 flex justify-between items-center shadow-sm">
-            <div className="flex items-center gap-4">
-              <div>
-                <h1 className="text-xl font-bold text-primary">Tag Database Manager</h1>
-                {currentProjectId && (
-                  <div className="text-sm text-secondary mt-1">
-                    Project ID: {currentProjectId}
-                    {availableProjects.length > 0 && (
-                      <span className="ml-2">
-                        - {availableProjects.find(p => p.id === currentProjectId)?.project_name || 'Unknown Project'}
-                      </span>
-                    )}
-                  </div>
-                )}
-              </div>
-
-              {/* Real-time Sync Status */}
-              {!sessionMode && currentProjectId && (
-                <div className="flex items-center gap-2">
-                  {isConnecting ? (
-                    <div className="flex items-center gap-1 text-yellow-600">
-                      <Clock className="w-4 h-4 animate-pulse" />
-                      <span className="text-xs">Connecting...</span>
-                    </div>
-                  ) : isConnected ? (
-                    <div className="flex items-center gap-1 text-green-600">
-                      <Wifi className="w-4 h-4" />
-                      <span className="text-xs">Live Sync</span>
-                      {lastRealTimeUpdate && (
-                        <span className="text-xs text-gray-500">
-                          (Updated {Math.round((Date.now() - lastRealTimeUpdate) / 1000)}s ago)
-                        </span>
-                      )}
-                    </div>
-                  ) : (
-                    <div className="flex items-center gap-1 text-red-600">
-                      <WifiOff className="w-4 h-4" />
-                      <span className="text-xs">Offline</span>
-                    </div>
+            <div>
+              <h1 className="text-xl font-bold text-primary">Tag Database Manager</h1>
+              {currentProjectId && (
+                <div className="text-sm text-secondary mt-1">
+                  Project ID: {currentProjectId}
+                  {availableProjects.length > 0 && (
+                    <span className="ml-2">
+                      - {availableProjects.find(p => p.id === currentProjectId)?.project_name || 'Unknown Project'}
+                    </span>
                   )}
                 </div>
-              )}
-
-              {/* Autosave Status */}
-              {!sessionMode && currentProjectId && (
-                <AutosaveStatus
-                  isSaving={isAutosaving}
-                  lastSaved={lastAutosaved}
-                  saveError={autosaveError}
-                  hasUnsavedChanges={hasUnsavedTagChanges}
-                  onManualSave={saveTagManagerState}
-                  className="text-xs"
-                />
               )}
             </div>
 
@@ -631,42 +378,45 @@ const TagDatabaseManagerContent: React.FC<TagDatabaseManagerProps> = ({ sessionM
             </button>
           )}
           
-          <button
-            onClick={handleImportButtonClick}
-            disabled={loading || !currentProjectId}
-            className="bg-primary text-white px-4 py-2 rounded-md flex items-center gap-2 text-sm hover:bg-primary transition-colors cursor-pointer disabled:opacity-50"
-            title="Import Beckhoff tags from CSV or XML files"
-          >
-            <Upload className="w-4 h-4" />
-            Import Tags
-          </button>
-          
-          {/* <button 
+          <button 
             onClick={() => handleExport('excel')}
-            disabled={loading || !currentProjectId}
+            disabled={loading}
             className="bg-primary text-white px-4 py-2 rounded-md text-sm hover:bg-secondary transition-colors cursor-pointer disabled:opacity-50"
           >
             Export to Excel (.xlsx)
-          </button> */}
-          
-          <button
-            onClick={handleExportButtonClick}
-            disabled={loading || !currentProjectId || tags.length === 0}
-            className="bg-primary border border-light px-4 py-2 rounded-md flex items-center gap-2 text-sm hover:bg-primary transition-colors cursor-pointer disabled:opacity-50 text-white hover:text-white"
-            title={tags.length === 0 ? "No tags to export. Please add tags first." : "Export tags in vendor-specific formats"}
-          >
-            <Download className="w-4 h-4" />
-            Export your tags
           </button>
+          
+          <div className="relative" ref={vendorDropdownRef}>
+            <button
+              onClick={() => setShowVendorDropdown(!showVendorDropdown)}
+              disabled={loading}
+              className="bg-white border border-light px-4 py-2 rounded-md flex items-center gap-2 text-sm hover:bg-accent-light transition-colors cursor-pointer disabled:opacity-50"
+            >
+              Export to Vendor Format <ChevronDown className="w-4 h-4" />
+            </button>
+            {showVendorDropdown && (
+              <div className="absolute right-0 mt-2 bg-white border border-light rounded-md shadow-md w-56 z-50">
+                {["Rockwell CSV", "TIA XML", "Beckhoff XLS"].map((item) => (
+                  <div
+                    key={item}
+                    onClick={() => handleExport(item.toLowerCase())}
+                    className="px-4 py-2 text-sm hover:bg-gray-100 cursor-pointer transition"
+                  >
+                    {item}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
 
-          <button
+          {/* <button
             onClick={handleAutoGenerate}
-            disabled={loading || !currentProjectId}
+            disabled={loading}
             className="bg-white border border-light px-4 py-2 rounded-md text-sm hover:bg-accent-light transition-colors cursor-pointer flex items-center gap-2 disabled:opacity-50"
           >
             <Bot className="w-4 h-4" />
             Auto-Generate Tags
-          </button>
+          </button> */}
 
           <button
             onClick={refreshTags}
@@ -847,9 +597,13 @@ const TagDatabaseManagerContent: React.FC<TagDatabaseManagerProps> = ({ sessionM
                         onChange={(e) => handleEditTag(tag.id, 'type', e.target.value)}
                         className="border border-light rounded px-2 py-1 text-sm"
                       >
-                        {getAvailableTagTypes(tag.vendor as Vendor).map((tagType) => (
-                          <option key={tagType} value={tagType}>{tagType}</option>
-                        ))}
+                        <option value="BOOL">BOOL</option>
+                        <option value="INT">INT</option>
+                        <option value="REAL">REAL</option>
+                        <option value="DINT">DINT</option>
+                        <option value="STRING">STRING</option>
+                        <option value="TIMER">TIMER</option>
+                        <option value="COUNTER">COUNTER</option>
                       </select>
                     ) : (
                       <span className="text-sm font-mono">{tag.type}</span>
@@ -1041,28 +795,6 @@ const TagDatabaseManagerContent: React.FC<TagDatabaseManagerProps> = ({ sessionM
           onSuccess={() => setShowCreateTagModal(false)}
           projectId={currentProjectId}
           onCreate={handleCreateTag}
-        />
-      )}
-
-      {/* Vendor Export Modal */}
-      {currentProjectId && currentProject && (
-        <VendorExportModal
-          isOpen={showVendorExportModal}
-          onClose={() => setShowVendorExportModal(false)}
-          projectId={currentProjectId}
-          projectName={currentProject.project_name}
-          tags={tags}
-        />
-      )}
-
-      {/* Vendor Import Modal */}
-      {currentProjectId && currentProject && (
-        <VendorImportModal
-          isOpen={showVendorImportModal}
-          onClose={() => setShowVendorImportModal(false)}
-          projectId={currentProjectId}
-          projectName={currentProject.project_name}
-          onSuccess={handleImportSuccess}
         />
       )}
       </>

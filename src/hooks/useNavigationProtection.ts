@@ -38,7 +38,8 @@ export function useNavigationProtection({
         }
 
         e.preventDefault();
-        e.returnValue = message;
+        // Modern browsers use preventDefault() and return value
+        e.returnValue = ''; // Empty string for modern browsers
         return message;
       }
     };

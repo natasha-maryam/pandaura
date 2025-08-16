@@ -1,7 +1,7 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
-import { Project, ApiProject, convertApiToDisplay } from './types';
-import { ProjectsAPI } from './api';
-import { useVersionControl } from '../../hooks/useVersionControl';
+import { useState, useEffect, useRef, useCallback } from "react";
+import { Project, ApiProject, convertApiToDisplay } from "./types";
+import { ProjectsAPI } from "./api";
+import { useVersionControl } from "../../hooks/useVersionControl";
 
 export interface UseProjectsOptions {
   autoRefresh?: boolean;
@@ -23,9 +23,11 @@ export interface UseProjectsReturn {
 /**
  * Custom hook for managing projects with API integration
  */
-export function useProjects(options: UseProjectsOptions = {}): UseProjectsReturn {
+export function useProjects(
+  options: UseProjectsOptions = {}
+): UseProjectsReturn {
   const { autoRefresh = false, refreshInterval = 30000 } = options;
-  
+
   const [projects, setProjects] = useState<Project[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -38,8 +40,8 @@ export function useProjects(options: UseProjectsOptions = {}): UseProjectsReturn
       const displayProjects = apiProjects.map(convertApiToDisplay);
       setProjects(displayProjects);
     } catch (err: any) {
-      console.error('Failed to load projects:', err);
-      setError(err.message || 'Failed to load projects');
+      console.error("Failed to load projects:", err);
+      setError(err.message || "Failed to load projects");
     } finally {
       setIsLoading(false);
     }
@@ -55,10 +57,10 @@ export function useProjects(options: UseProjectsOptions = {}): UseProjectsReturn
   const createProject = async (data: any): Promise<Project> => {
     const apiProject = await ProjectsAPI.createProject(data);
     const displayProject = convertApiToDisplay(apiProject);
-    
+
     // Add to local state
-    setProjects(prev => [displayProject, ...prev]);
-    
+    setProjects((prev) => [displayProject, ...prev]);
+
     return displayProject;
   };
 
@@ -66,19 +68,19 @@ export function useProjects(options: UseProjectsOptions = {}): UseProjectsReturn
   const updateProject = async (id: number, data: any): Promise<Project> => {
     const apiProject = await ProjectsAPI.updateProject(id, data);
     const displayProject = convertApiToDisplay(apiProject);
-    
+
     // Update local state
-    setProjects(prev => prev.map(p => p.id === id ? displayProject : p));
-    
+    setProjects((prev) => prev.map((p) => (p.id === id ? displayProject : p)));
+
     return displayProject;
   };
 
   // Delete project
   const deleteProject = async (id: number): Promise<void> => {
     await ProjectsAPI.deleteProject(id);
-    
+
     // Remove from local state
-    setProjects(prev => prev.filter(p => p.id !== id));
+    setProjects((prev) => prev.filter((p) => p.id !== id));
   };
 
   // Auto-save project state
@@ -90,11 +92,13 @@ export function useProjects(options: UseProjectsOptions = {}): UseProjectsReturn
   // Explicitly save project
   const saveProject = async (id: number, state: any): Promise<void> => {
     await ProjectsAPI.saveProject(id, state);
-    
+
     // Update the project's updated_at timestamp in local state
-    setProjects(prev => prev.map(p => 
-      p.id === id ? { ...p, lastModified: new Date().toISOString() } : p
-    ));
+    setProjects((prev) =>
+      prev.map((p) =>
+        p.id === id ? { ...p, lastModified: new Date().toISOString() } : p
+      )
+    );
   };
 
   // Initial load
@@ -104,11 +108,14 @@ export function useProjects(options: UseProjectsOptions = {}): UseProjectsReturn
 
   // Auto-refresh setup
   useEffect(() => {
-    if (!autoRefresh) return;
+    if (!autoRefresh) {
+      // No cleanup needed if auto-refresh is disabled
+      return;
+    }
 
     const interval = setInterval(loadProjects, refreshInterval);
     return () => clearInterval(interval);
-  }, [autoRefresh, refreshInterval]);
+  }, [autoRefresh, refreshInterval, loadProjects]);
 
   return {
     projects,
@@ -136,13 +143,35 @@ export function useProject(projectId: number, autosaveInterval = 30000) {
   // Load single project
   const loadProject = async () => {
     try {
+      console.log(`useProject: Loading project ${projectId}...`);
       setError(null);
       const apiProject = await ProjectsAPI.getProject(projectId);
+      console.log(
+        `useProject: Project ${projectId} loaded successfully:`,
+        apiProject
+      );
       const displayProject = convertApiToDisplay(apiProject);
       setProject(displayProject);
     } catch (err: any) {
-      console.error('Failed to load project:', err);
-      setError(err.message || 'Failed to load project');
+      console.error("Failed to load project:", err);
+
+      // Enhanced error handling for network issues
+      let errorMessage = "Failed to load project";
+      if (err.code === "ERR_NETWORK") {
+        errorMessage =
+          "Cannot connect to server. Please check if the backend is running on port 5000.";
+      } else if (err.code === "ERR_INSUFFICIENT_RESOURCES") {
+        errorMessage =
+          "Server resource error. Please try refreshing the page or restart the backend.";
+      } else if (err.response?.status === 404) {
+        errorMessage = `Project with ID ${projectId} not found.`;
+      } else if (err.response?.status === 401) {
+        errorMessage = "Authentication required. Please log in again.";
+      } else if (err.message) {
+        errorMessage = err.message;
+      }
+
+      setError(errorMessage);
     } finally {
       setIsLoading(false);
     }
@@ -151,7 +180,7 @@ export function useProject(projectId: number, autosaveInterval = 30000) {
   // Update project data
   const updateProject = async (data: any): Promise<void> => {
     if (!project) return;
-    
+
     const apiProject = await ProjectsAPI.updateProject(project.id, data);
     const displayProject = convertApiToDisplay(apiProject);
     setProject(displayProject);
@@ -162,19 +191,19 @@ export function useProject(projectId: number, autosaveInterval = 30000) {
   // Auto-save functionality
   const autosave = async (state: any): Promise<void> => {
     if (!project) return;
-    
+
     try {
       await ProjectsAPI.autosaveProject(project.id, state);
       setLastSaved(new Date());
     } catch (err) {
-      console.error('Auto-save failed:', err);
+      console.error("Auto-save failed:", err);
     }
   };
 
   // Explicit save
   const save = async (state: any): Promise<void> => {
     if (!project) return;
-    
+
     await ProjectsAPI.saveProject(project.id, state);
     setIsDirty(false);
     setLastSaved(new Date());
@@ -185,8 +214,10 @@ export function useProject(projectId: number, autosaveInterval = 30000) {
 
   // Initial load
   useEffect(() => {
-    loadProject();
-  }, [projectId]);
+    if (projectId && projectId > 0) {
+      loadProject();
+    }
+  }, [projectId]); // Remove loadProject from dependencies to prevent infinite loop
 
   return {
     project,
@@ -222,9 +253,9 @@ export function useProjectAutosave(projectId: number, initialState: any = {}) {
 
   // Version control integration
   const { triggerAutoVersion, createVersion } = useVersionControl({
-    projectId,
+    projectId: projectId ?? -1, // use a safe dummy id
     autoCreateVersions: true,
-    versionInterval: 10 * 60 * 1000 // Create auto-versions every 10 minutes
+    versionInterval: 10 * 60 * 1000,
   });
 
   // Deep comparison function to detect changes
@@ -233,113 +264,137 @@ export function useProjectAutosave(projectId: number, initialState: any = {}) {
   }, []);
 
   // Autosave function with retry logic
-  const performAutosave = useCallback(async (state: any, isManualSave = false): Promise<boolean> => {
-    if (!projectId || !hasChanged(state, lastSavedStateRef.current)) {
-      return true;
-    }
-
-    setIsSaving(true);
-    setSaveError(null);
-
-    try {
-      if (isManualSave) {
-        await ProjectsAPI.saveProject(projectId, { autosaveState: state });
-      } else {
-        await ProjectsAPI.autosaveProject(projectId, state);
+  const performAutosave = useCallback(
+    async (state: any, isManualSave = false): Promise<boolean> => {
+      if (!projectId || !hasChanged(state, lastSavedStateRef.current)) {
+        return true;
       }
 
-      lastSavedStateRef.current = structuredClone(state);
-      setLastSaved(new Date());
-      setHasUnsavedChanges(false);
-      retryCountRef.current = 0;
+      setIsSaving(true);
+      setSaveError(null);
 
-      // Version control integration
-      if (isManualSave) {
-        // For manual saves, create a proper version with message
-        try {
-          await createVersion(`Manual save - ${new Date().toLocaleString()}`, state);
-          console.log('Manual version created successfully');
-        } catch (versionError) {
-          console.error('Failed to create manual version:', versionError);
-          // Don't fail the save if version creation fails
+      try {
+        if (isManualSave) {
+          await ProjectsAPI.saveProject(projectId, { autosaveState: state });
+        } else {
+          await ProjectsAPI.autosaveProject(projectId, state);
         }
-      } else {
-        // For auto-saves, increment change counter and trigger auto-version if needed
-        significantChangeCountRef.current++;
 
-        // Create auto-version every 10 significant changes or based on time interval
-        if (significantChangeCountRef.current >= 10) {
+        lastSavedStateRef.current = structuredClone(state);
+        setLastSaved(new Date());
+        setHasUnsavedChanges(false);
+        retryCountRef.current = 0;
+
+        // Version control integration
+        if (isManualSave) {
+          // For manual saves, create a proper version with message
           try {
-            await triggerAutoVersion(state, `Auto-version after ${significantChangeCountRef.current} changes`);
-            significantChangeCountRef.current = 0; // Reset counter
+            await createVersion(
+              `Manual save - ${new Date().toLocaleString()}`,
+              state
+            );
+            console.log("Manual version created successfully");
           } catch (versionError) {
-            console.error('Failed to create auto-version:', versionError);
+            console.error("Failed to create manual version:", versionError);
             // Don't fail the save if version creation fails
           }
+        } else {
+          // For auto-saves, increment change counter and trigger auto-version if needed
+          significantChangeCountRef.current++;
+
+          // Create auto-version every 10 significant changes or based on time interval
+          if (significantChangeCountRef.current >= 10) {
+            try {
+              await triggerAutoVersion(
+                state,
+                `Auto-version after ${significantChangeCountRef.current} changes`
+              );
+              significantChangeCountRef.current = 0; // Reset counter
+            } catch (versionError) {
+              console.error("Failed to create auto-version:", versionError);
+              // Don't fail the save if version creation fails
+            }
+          }
         }
-      }
 
-      return true;
-    } catch (error: any) {
-      const errorMessage = error.response?.data?.error || error.message || 'Auto-save failed';
-      console.error('Auto-save failed:', errorMessage);
+        return true;
+      } catch (error: any) {
+        const errorMessage =
+          error.response?.data?.error || error.message || "Auto-save failed";
+        console.error("Auto-save failed:", errorMessage);
 
-      // Retry logic for network errors
-      if (retryCountRef.current < maxRetries && !isManualSave) {
-        retryCountRef.current++;
-        console.log(`Retrying auto-save (attempt ${retryCountRef.current}/${maxRetries})`);
+        // Retry logic for network errors
+        if (retryCountRef.current < maxRetries && !isManualSave) {
+          retryCountRef.current++;
+          console.log(
+            `Retrying auto-save (attempt ${retryCountRef.current}/${maxRetries})`
+          );
 
-        // Exponential backoff: 2s, 4s, 8s
-        const retryDelay = Math.pow(2, retryCountRef.current) * 1000;
-        setTimeout(() => performAutosave(state, false), retryDelay);
-      } else {
-        setSaveError(errorMessage);
+          // Exponential backoff: 2s, 4s, 8s
+          const retryDelay = Math.pow(2, retryCountRef.current) * 1000;
+          setTimeout(() => performAutosave(state, false), retryDelay);
+        } else {
+          setSaveError(errorMessage);
 
-        // Cache to localStorage as fallback
-        try {
-          const fallbackKey = `pandaura_project_${projectId}_fallback`;
-          localStorage.setItem(fallbackKey, JSON.stringify({
-            state,
-            timestamp: Date.now(),
-            projectId
-          }));
-          console.log('State cached to localStorage as fallback');
-        } catch (localError) {
-          console.error('Failed to cache state to localStorage:', localError);
+          // Cache to localStorage as fallback
+          try {
+            const fallbackKey = `pandaura_project_${projectId}_fallback`;
+            localStorage.setItem(
+              fallbackKey,
+              JSON.stringify({
+                state,
+                timestamp: Date.now(),
+                projectId,
+              })
+            );
+            console.log("State cached to localStorage as fallback");
+          } catch (localError) {
+            console.error("Failed to cache state to localStorage:", localError);
+          }
         }
-      }
 
-      return false;
-    } finally {
-      setIsSaving(false);
-    }
-  }, [projectId, hasChanged]);
+        return false;
+      } finally {
+        setIsSaving(false);
+      }
+    },
+    [projectId, hasChanged]
+  );
 
   // Debounced autosave
-  const debouncedAutosave = useCallback((state: any) => {
-    if (saveTimeoutRef.current) {
-      clearTimeout(saveTimeoutRef.current);
-    }
-
-    saveTimeoutRef.current = setTimeout(() => {
-      performAutosave(state, false);
-    }, 2000); // 2 second debounce
-  }, [performAutosave]);
-
-  // Update project state and trigger autosave
-  const updateProjectState = useCallback((updates: Partial<any> | ((prev: any) => any)) => {
-    setProjectState((prev: any) => {
-      const newState = typeof updates === 'function' ? updates(prev) : { ...prev, ...updates };
-
-      // Check if state actually changed
-      if (hasChanged(newState, lastSavedStateRef.current)) {
-        setHasUnsavedChanges(true);
-        debouncedAutosave(newState);
+  const debouncedAutosave = useCallback(
+    (state: any) => {
+      if (saveTimeoutRef.current) {
+        clearTimeout(saveTimeoutRef.current);
       }
 
-      return newState;
-    });
-  }, [hasChanged, debouncedAutosave]);
+      saveTimeoutRef.current = setTimeout(() => {
+        performAutosave(state, false);
+      }, 2000); // 2 second debounce
+    },
+    [performAutosave]
+  );
+
+  // Update project state and trigger autosave
+  const updateProjectState = useCallback(
+    (updates: Partial<any> | ((prev: any) => any)) => {
+      setProjectState((prev: any) => {
+        const newState =
+          typeof updates === "function"
+            ? updates(prev)
+            : { ...prev, ...updates };
+
+        // Check if state actually changed
+        if (hasChanged(newState, lastSavedStateRef.current)) {
+          setHasUnsavedChanges(true);
+          debouncedAutosave(newState);
+        }
+
+        return newState;
+      });
+    },
+    [hasChanged, debouncedAutosave]
+  );
 
   // Manual save function
   const saveNow = useCallback(async (): Promise<boolean> => {
@@ -347,25 +402,28 @@ export function useProjectAutosave(projectId: number, initialState: any = {}) {
   }, [performAutosave, projectState]);
 
   // Manual save with custom version message
-  const saveWithMessage = useCallback(async (message: string): Promise<boolean> => {
-    if (!projectId) return false;
+  const saveWithMessage = useCallback(
+    async (message: string): Promise<boolean> => {
+      if (!projectId) return false;
 
-    try {
-      // First perform the autosave
-      const saveSuccess = await performAutosave(projectState, false);
+      try {
+        // First perform the autosave
+        const saveSuccess = await performAutosave(projectState, false);
 
-      if (saveSuccess) {
-        // Then create a version with the custom message
-        await createVersion(message, projectState);
-        console.log('Manual version created with message:', message);
+        if (saveSuccess) {
+          // Then create a version with the custom message
+          await createVersion(message, projectState);
+          console.log("Manual version created with message:", message);
+        }
+
+        return saveSuccess;
+      } catch (error) {
+        console.error("Failed to save with message:", error);
+        return false;
       }
-
-      return saveSuccess;
-    } catch (error) {
-      console.error('Failed to save with message:', error);
-      return false;
-    }
-  }, [projectId, performAutosave, projectState, createVersion]);
+    },
+    [projectId, performAutosave, projectState, createVersion]
+  );
 
   // Load fallback state from localStorage
   const loadFallbackState = useCallback(() => {
@@ -379,7 +437,7 @@ export function useProjectAutosave(projectId: number, initialState: any = {}) {
 
         // Only use fallback if it's less than 1 hour old
         if (fallbackAge < 60 * 60 * 1000) {
-          console.log('Loaded fallback state from localStorage');
+          console.log("Loaded fallback state from localStorage");
           setProjectState(state);
           setHasUnsavedChanges(true);
 
@@ -391,7 +449,7 @@ export function useProjectAutosave(projectId: number, initialState: any = {}) {
         localStorage.removeItem(fallbackKey);
       }
     } catch (error) {
-      console.error('Failed to load fallback state:', error);
+      console.error("Failed to load fallback state:", error);
     }
   }, [projectId, performAutosave]);
 
@@ -420,6 +478,6 @@ export function useProjectAutosave(projectId: number, initialState: any = {}) {
     hasUnsavedChanges,
     saveNow,
     saveWithMessage,
-    loadFallbackState
+    loadFallbackState,
   };
 }
