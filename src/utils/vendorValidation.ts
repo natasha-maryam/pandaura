@@ -1,13 +1,13 @@
 // Vendor-specific validation utilities for tags
 
 export type Vendor = 'rockwell' | 'siemens' | 'beckhoff';
-export type TagType = 'BOOL' | 'INT' | 'DINT' | 'REAL' | 'STRING' | 'TIMER' | 'COUNTER';
+export type TagType = 'BOOL' | 'INT' | 'DINT' | 'REAL' | 'STRING';
 
 // Vendor-specific supported data types
 export const vendorSupportedTypes: Record<Vendor, TagType[]> = {
-  rockwell: ['BOOL', 'INT', 'DINT', 'REAL', 'STRING', 'TIMER', 'COUNTER'],
+  rockwell: ['BOOL', 'INT', 'DINT', 'REAL', 'STRING'],
   siemens: ['BOOL', 'INT', 'DINT', 'REAL', 'STRING'], // Siemens doesn't support TIMER/COUNTER
-  beckhoff: ['BOOL', 'INT', 'DINT', 'REAL', 'STRING', 'TIMER', 'COUNTER']
+  beckhoff: ['BOOL', 'INT', 'DINT', 'REAL', 'STRING']
 };
 
 // Validate if a data type is supported by a vendor

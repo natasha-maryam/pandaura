@@ -7,6 +7,7 @@ export interface InputProps {
   type?: 'text' | 'email' | 'password' | 'number' | 'tel' | 'url' | 'search';
   value: string;
   onChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
+  onBlur?: (e: React.FocusEvent<HTMLInputElement>) => void;
   placeholder?: string;
   label?: string;
   required?: boolean;
@@ -38,6 +39,7 @@ export default function Input({
   maxLength,
   pattern,
   icon: Icon,
+  onBlur,
   iconPosition = 'right',
   onIconClick,
   error,
@@ -76,6 +78,7 @@ export default function Input({
           type={type}
           value={value}
           onChange={onChange}
+          onBlur={onBlur}
           placeholder={placeholder}
           required={required}
           disabled={disabled}

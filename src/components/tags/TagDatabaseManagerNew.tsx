@@ -16,7 +16,7 @@ import {
 } from "lucide-react";
 
 import { TagsProvider, useTags } from "./context";
-import { TagsAPI, Tag, CreateTagData } from "./api";
+import { TagsAPI, Tag, CreateTagData, TagFilters } from "./api";
 import { ProjectsAPI, Project } from "../projects/api";
 import VendorExportModal from "./VendorExportModal";
 import VendorImportModal from "./VendorImportModal";
@@ -26,17 +26,6 @@ import Modal from "../ui/Modal";
 import Button from "../ui/Button";
 import { useTagSyncOnly } from "../../contexts/ProjectSyncContext";
 import { TagSyncResponse } from "../../hooks/useTagSync";
-
-const {
-  isConnected,
-  isConnecting,
-  lastError: syncError,
-  lastSyncTime,
-  queuedSyncs,
-  latestTags,
-  onTagsUpdated,
-  offTagsUpdated,
-} = useTagSyncOnly();
 
 import {
   validateTagTypeForVendor,
@@ -63,6 +52,17 @@ const TagDatabaseManagerContent: React.FC<TagDatabaseManagerProps> = ({
   const isProjectWorkspace = window.location.pathname.startsWith("/workspace/");
 
   const {
+    isConnected,
+    isConnecting,
+    lastError: syncError,
+    lastSyncTime,
+    queuedSyncs,
+    latestTags,
+    onTagsUpdated,
+    offTagsUpdated,
+  } = useTagSyncOnly();
+
+  const {
     tags,
     loading,
     error,
@@ -79,6 +79,8 @@ const TagDatabaseManagerContent: React.FC<TagDatabaseManagerProps> = ({
 
   const [showVendorDropdown, setShowVendorDropdown] = useState(false);
   const [editingTag, setEditingTag] = useState<string | null>(null);
+  const [editBuffer, setEditBuffer] = useState<Record<string, Partial<Tag>>>({});
+  const pendingTimersRef = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
   const [currentProjectId, setCurrentProjectId] = useState<number | null>(null);
   const [availableProjects, setAvailableProjects] = useState<Project[]>([]);
   const [loadingProjects, setLoadingProjects] = useState(false);
@@ -89,10 +91,9 @@ const TagDatabaseManagerContent: React.FC<TagDatabaseManagerProps> = ({
   const [showVendorExportModal, setShowVendorExportModal] = useState(false);
   const [showVendorImportModal, setShowVendorImportModal] = useState(false);
   const [currentProject, setCurrentProject] = useState<Project | null>(null);
-  const [lastRealTimeUpdate, setLastRealTimeUpdate] = useState<number | null>(
-    null
-  );
-
+  const [lastRealTimeUpdate, setLastRealTimeUpdate] = useState<number | null>(null);
+  const [showReloadButton, setShowReloadButton] = useState(false);
+  
   const vendorDropdownRef = useRef<HTMLDivElement>(null);
 
   const handleRealTimeTagUpdate = useCallback(
@@ -107,9 +108,22 @@ const TagDatabaseManagerContent: React.FC<TagDatabaseManagerProps> = ({
         );
         setLastRealTimeUpdate(Date.now());
 
-        // Refresh tags to get the latest data
+        // Avoid race conditions by using a ref for the latest project ID
         if (currentProjectId) {
-          refreshTags();
+          // Debounce tag refresh to prevent multiple rapid updates
+          const timeoutId = setTimeout(() => {
+            refreshTags().catch((error) => {
+              console.error("Failed to refresh tags:", error);
+              showToast({
+                variant: "error",
+                title: "Sync Error",
+                message: "Failed to refresh tags. Please try again.",
+              });
+            });
+          }, 500);
+
+          // Cleanup timeout if component unmounts
+          return () => clearTimeout(timeoutId);
         }
 
         showToast({
@@ -118,19 +132,66 @@ const TagDatabaseManagerContent: React.FC<TagDatabaseManagerProps> = ({
           message: `${
             response.parsedCount || response.tags.length
           } tags synced from Logic Studio`,
+          duration: 3000,
+        });
+      } else if (response.type === "tags_updated" && !response.success) {
+        console.error("Tag sync failed:", response.error);
+        showToast({
+          variant: "error",
+          title: "Sync Failed",
+          message: response.error || "Failed to sync tags from Logic Studio",
+          duration: 5000,
         });
       }
     },
     [currentProjectId, refreshTags, showToast]
   );
 
-  // Subscribe to real-time tag updates
+  // Subscribe to real-time tag updates and handle cleanup
   useEffect(() => {
-    onTagsUpdated(handleRealTimeTagUpdate);
+    let isMounted = true;
+    let syncTimeoutId: ReturnType<typeof setInterval>;
+
+    const handleSync = async () => {
+      if (!isMounted) return;
+
+      try {
+        onTagsUpdated(handleRealTimeTagUpdate);
+        
+        // Set up periodic sync health check
+        syncTimeoutId = setInterval(() => {
+          if (!isConnected && !isConnecting && isMounted) {
+            showToast({
+              variant: "warning",
+              title: "Sync Disconnected",
+              message: "Tag sync connection lost. Attempting to reconnect...",
+              duration: 5000,
+            });
+            setShowReloadButton(true);
+          }
+        }, 30000); // Check every 30 seconds
+      } catch (error) {
+        console.error("Failed to initialize tag sync:", error);
+        if (isMounted) {
+          showToast({
+            variant: "error",
+            title: "Sync Error",
+            message: "Failed to initialize tag sync. Please try again.",
+            duration: 5000,
+          });
+        }
+      }
+    };
+
+    handleSync();
+
+    // Cleanup subscriptions and intervals
     return () => {
+      isMounted = false;
+      if (syncTimeoutId) clearInterval(syncTimeoutId);
       offTagsUpdated(handleRealTimeTagUpdate);
     };
-  }, [handleRealTimeTagUpdate, onTagsUpdated, offTagsUpdated]);
+  }, [handleRealTimeTagUpdate, onTagsUpdated, offTagsUpdated, isConnected, isConnecting, showToast]);
 
   const loadCurrentProject = async (projectId: number) => {
     try {
@@ -226,7 +287,61 @@ const TagDatabaseManagerContent: React.FC<TagDatabaseManagerProps> = ({
         loadCurrentProject(currentProjectId);
       }
     }
-  }, [currentProjectId]); // Remove fetchTags from dependencies to prevent infinite loop
+  }, [currentProjectId]);
+
+  // Listen for tag import events
+  useEffect(() => {
+    const handleTagsImported = (event: CustomEvent) => {
+      const { projectId, importedCount } = event.detail;
+      if (projectId === currentProjectId) {
+        setShowReloadButton(true);
+      }
+    };
+
+    window.addEventListener('pandaura:tags-imported', handleTagsImported as EventListener);
+    return () => {
+      window.removeEventListener('pandaura:tags-imported', handleTagsImported as EventListener);
+    };
+  }, [currentProjectId]);
+
+  const handleReloadTags = async () => {
+    try {
+      if (currentProjectId !== null) {
+        await fetchTags({ projectId: currentProjectId });
+      }
+      // Trigger real-time sync with Logic Studio
+      if (currentProjectId && currentProject?.target_plc_vendor) {
+        // Only sync if there's an active project and vendor
+        try {
+          await fetchTags({ 
+            projectId: currentProjectId, 
+            vendor: currentProject.target_plc_vendor 
+          });
+        } catch (error) {
+          console.error("Failed to sync tags:", error);
+          showToast({
+            variant: "error",
+            title: "Sync Error",
+            message: "Failed to sync tags with PLC. Please try again.",
+            duration: 5000,
+          });
+        }
+      }
+      setShowReloadButton(false);
+      showToast({
+        variant: "success",
+        title: "Tags Reloaded",
+        message: "Tags have been reloaded and synced with Logic Studio"
+      });
+    } catch (error) {
+      console.error('Error reloading tags:', error);
+      showToast({
+        variant: "error",
+        title: "Reload Failed",
+        message: "Failed to reload tags. Please try again."
+      });
+    }
+  }; // Remove fetchTags from dependencies to prevent infinite loop
 
   const filteredTags = tags.filter((tag) => {
     if (
@@ -261,15 +376,52 @@ const TagDatabaseManagerContent: React.FC<TagDatabaseManagerProps> = ({
     return true;
   });
 
-  const handleEditTag = async (tagId: string, field: keyof Tag, value: any) => {
+  const flushUpdate = async (tagId: string) => {
+    const buffered = editBuffer[tagId];
+    if (!buffered || Object.keys(buffered).length === 0) return;
+
+    // Clear pending timer
+    const timer = pendingTimersRef.current[tagId];
+    if (timer) {
+      clearTimeout(timer);
+      delete pendingTimersRef.current[tagId];
+    }
+
     try {
-      // Get the current tag to access vendor information
+      await updateTag(tagId, buffered as any);
+      // Show success toast once per flushed update
+      showToast({
+        variant: "success",
+        title: "Tag Updated",
+        message: `Changes saved`,
+        duration: 3000,
+      });
+      // Clear buffer for this tag after successful save
+      setEditBuffer((prev) => {
+        const copy = { ...prev };
+        delete copy[tagId];
+        return copy;
+      });
+    } catch (error) {
+      console.error("Error flushing tag update:", error);
+      const errorMessage = error instanceof Error ? error.message : "Failed to update tag";
+      showToast({
+        variant: "error",
+        title: "Update Failed",
+        message: errorMessage,
+        duration: 5000,
+      });
+    }
+  };
+
+  const handleEditTag = (tagId: string, field: keyof Tag, value: any) => {
+    try {
       const tag = tags.find((t) => t.id === tagId);
       if (!tag) {
         throw new Error("Tag not found");
       }
 
-      // Validate vendor-specific constraints
+      // Validate vendor-specific constraints early for immediate feedback
       if (field === "type") {
         const isValidType = validateTagTypeForVendor(
           value as TagType,
@@ -280,55 +432,38 @@ const TagDatabaseManagerContent: React.FC<TagDatabaseManagerProps> = ({
             value as TagType,
             tag.vendor as Vendor
           );
-          showToast({
-            variant: "error",
-            title: "Invalid Data Type",
-            message: errorMessage,
-            duration: 5000,
-          });
-          return; // Don't proceed with the update
+          showToast({ variant: "error", title: "Invalid Data Type", message: errorMessage, duration: 5000 });
+          return;
         }
       }
 
       if (field === "address") {
-        const isValidAddress = validateAddressForVendor(
-          value,
-          tag.vendor as Vendor
-        );
+        const isValidAddress = validateAddressForVendor(value, tag.vendor as Vendor);
         if (!isValidAddress) {
-          const errorMessage = getInvalidAddressMessage(
-            value,
-            tag.vendor as Vendor
-          );
-          showToast({
-            variant: "error",
-            title: "Invalid Address Format",
-            message: errorMessage,
-            duration: 5000,
-          });
-          return; // Don't proceed with the update
+          const errorMessage = getInvalidAddressMessage(value, tag.vendor as Vendor);
+          showToast({ variant: "error", title: "Invalid Address Format", message: errorMessage, duration: 5000 });
+          return;
         }
       }
 
-      await updateTag(tagId, { [field]: value });
+      // Update local buffer so input reflects immediately without server round trips
+      setEditBuffer((prev) => ({
+        ...prev,
+        [tagId]: {
+          ...(prev[tagId] || {}),
+          [field]: value,
+        },
+      }));
 
-      // Show success message for successful updates
-      showToast({
-        variant: "success",
-        title: "Tag Updated",
-        message: `${field} updated successfully`,
-        duration: 3000,
-      });
+      // Debounce per-tag: reset existing timer and start a new one
+      if (pendingTimersRef.current[tagId]) {
+        clearTimeout(pendingTimersRef.current[tagId]);
+      }
+      pendingTimersRef.current[tagId] = setTimeout(() => flushUpdate(tagId), 800);
     } catch (error) {
-      console.error("Error updating tag:", error);
-      const errorMessage =
-        error instanceof Error ? error.message : "Failed to update tag";
-      showToast({
-        variant: "error",
-        title: "Update Failed",
-        message: errorMessage,
-        duration: 5000,
-      });
+      console.error("Error scheduling tag update:", error);
+      const errorMessage = error instanceof Error ? error.message : "Failed to schedule tag update";
+      showToast({ variant: "error", title: "Update Failed", message: errorMessage, duration: 5000 });
     }
   };
 
@@ -505,8 +640,44 @@ const TagDatabaseManagerContent: React.FC<TagDatabaseManagerProps> = ({
     }
   };
 
-  const handleFilterChange = (key: string, value: string) => {
-    setFilters({ [key]: value === "all" || value === "" ? undefined : value });
+  // Type-safe filter handling
+  // Type-safe filter handling using TagFilters interface
+  const handleFilterChange = (
+    key: keyof TagFilters,
+    value: string
+  ) => {
+    const filterValue = value === "all" || value === "" ? undefined : value;
+    
+    // Type guard for boolean isAIGenerated
+    if (key === 'isAIGenerated') {
+      const boolValue = filterValue === 'true' ? true : filterValue === 'false' ? false : undefined;
+      
+      setFilters({
+        isAIGenerated: boolValue
+      });
+      return;
+    }
+
+    // Handle data type separately
+    if (key === 'dataType') {
+      setFilters({
+        dataType: filterValue
+      });
+      return;
+    }
+
+    // Handle tag type separately
+    if (key === 'tagType') {
+      setFilters({
+        tagType: filterValue
+      });
+      return;
+    }
+
+    // All other string filters
+    setFilters({
+      [key]: filterValue
+    });
   };
 
   const clearAllFilters = () => {
@@ -697,8 +868,6 @@ const TagDatabaseManagerContent: React.FC<TagDatabaseManagerProps> = ({
             <option value="REAL">REAL</option>
             <option value="DINT">DINT</option>
             <option value="STRING">STRING</option>
-            <option value="TIMER">TIMER</option>
-            <option value="COUNTER">COUNTER</option>
           </select>
 
           <select
@@ -791,10 +960,11 @@ const TagDatabaseManagerContent: React.FC<TagDatabaseManagerProps> = ({
                         {editingTag === tag.id ? (
                           <input
                             type="text"
-                            value={tag.name}
+                            value={(editBuffer[tag.id]?.name as string) ?? tag.name}
                             onChange={(e) =>
                               handleEditTag(tag.id, "name", e.target.value)
                             }
+                            onBlur={() => flushUpdate(tag.id)}
                             className="border border-light rounded px-2 py-1 text-sm w-full font-mono"
                             autoFocus
                           />
@@ -809,13 +979,14 @@ const TagDatabaseManagerContent: React.FC<TagDatabaseManagerProps> = ({
                       </div>
                     </td>
                     <td className="p-3">
-                      {editingTag === tag.id ? (
+                        {editingTag === tag.id ? (
                         <input
                           type="text"
-                          value={tag.description}
+                          value={(editBuffer[tag.id]?.description as string) ?? tag.description}
                           onChange={(e) =>
                             handleEditTag(tag.id, "description", e.target.value)
                           }
+                          onBlur={() => flushUpdate(tag.id)}
                           className="border border-light rounded px-2 py-1 text-sm w-full"
                         />
                       ) : (
@@ -825,12 +996,13 @@ const TagDatabaseManagerContent: React.FC<TagDatabaseManagerProps> = ({
                       )}
                     </td>
                     <td className="p-3">
-                      {editingTag === tag.id ? (
+                        {editingTag === tag.id ? (
                         <select
-                          value={tag.tag_type}
+                          value={(editBuffer[tag.id]?.tag_type as string) ?? tag.tag_type}
                           onChange={(e) =>
                             handleEditTag(tag.id, "tag_type", e.target.value)
                           }
+                          onBlur={() => flushUpdate(tag.id)}
                           className="border border-light rounded px-2 py-1 text-sm"
                         >
                           <option value="input">Input</option>
@@ -855,12 +1027,13 @@ const TagDatabaseManagerContent: React.FC<TagDatabaseManagerProps> = ({
                       )}
                     </td>
                     <td className="p-3">
-                      {editingTag === tag.id ? (
+                        {editingTag === tag.id ? (
                         <select
-                          value={tag.type}
+                          value={(editBuffer[tag.id]?.type as string) ?? tag.type}
                           onChange={(e) =>
                             handleEditTag(tag.id, "type", e.target.value)
                           }
+                          onBlur={() => flushUpdate(tag.id)}
                           className="border border-light rounded px-2 py-1 text-sm"
                         >
                           {getAvailableTagTypes(tag.vendor as Vendor).map(
@@ -876,13 +1049,14 @@ const TagDatabaseManagerContent: React.FC<TagDatabaseManagerProps> = ({
                       )}
                     </td>
                     <td className="p-3">
-                      {editingTag === tag.id ? (
+                        {editingTag === tag.id ? (
                         <input
                           type="text"
-                          value={tag.address}
+                          value={(editBuffer[tag.id]?.address as string) ?? tag.address}
                           onChange={(e) =>
                             handleEditTag(tag.id, "address", e.target.value)
                           }
+                          onBlur={() => flushUpdate(tag.id)}
                           className="border border-light rounded px-2 py-1 text-sm font-mono w-20"
                         />
                       ) : (
@@ -892,32 +1066,34 @@ const TagDatabaseManagerContent: React.FC<TagDatabaseManagerProps> = ({
                       )}
                     </td>
                     <td className="p-3">
-                      {editingTag === tag.id ? (
-                        <input
-                          type="text"
-                          value={tag.default_value}
-                          onChange={(e) =>
-                            handleEditTag(
-                              tag.id,
-                              "default_value",
-                              e.target.value
-                            )
-                          }
-                          className="border border-light rounded px-2 py-1 text-sm font-mono w-16"
-                        />
-                      ) : (
-                        <span className="text-sm font-mono text-muted">
-                          {tag.default_value}
-                        </span>
-                      )}
+                        {editingTag === tag.id ? (
+                          <input
+                            type="text"
+                            value={(editBuffer[tag.id]?.default_value as string) ?? tag.default_value}
+                            onChange={(e) =>
+                              handleEditTag(
+                                tag.id,
+                                "default_value",
+                                e.target.value
+                              )
+                            }
+                            onBlur={() => flushUpdate(tag.id)}
+                            className="border border-light rounded px-2 py-1 text-sm font-mono w-16"
+                          />
+                        ) : (
+                          <span className="text-sm font-mono text-muted">
+                            {tag.default_value}
+                          </span>
+                        )}
                     </td>
                     <td className="p-3">
-                      {editingTag === tag.id ? (
+                        {editingTag === tag.id ? (
                         <select
-                          value={tag.vendor}
+                          value={(editBuffer[tag.id]?.vendor as string) ?? tag.vendor}
                           onChange={(e) =>
                             handleEditTag(tag.id, "vendor", e.target.value)
                           }
+                          onBlur={() => flushUpdate(tag.id)}
                           className="border border-light rounded px-2 py-1 text-sm"
                         >
                           <option value="rockwell">Rockwell</option>
@@ -940,12 +1116,13 @@ const TagDatabaseManagerContent: React.FC<TagDatabaseManagerProps> = ({
                       )}
                     </td>
                     <td className="p-3">
-                      {editingTag === tag.id ? (
+                        {editingTag === tag.id ? (
                         <select
-                          value={tag.scope}
+                          value={(editBuffer[tag.id]?.scope as string) ?? tag.scope}
                           onChange={(e) =>
                             handleEditTag(tag.id, "scope", e.target.value)
                           }
+                          onBlur={() => flushUpdate(tag.id)}
                           className="border border-light rounded px-2 py-1 text-sm"
                         >
                           <option value="global">Global</option>
@@ -962,14 +1139,25 @@ const TagDatabaseManagerContent: React.FC<TagDatabaseManagerProps> = ({
                         {editingTag === tag.id ? (
                           <>
                             <button
-                              onClick={() => handleSaveTag(tag.id)}
+                              onClick={async () => {
+                                await flushUpdate(tag.id);
+                                setEditingTag(null);
+                              }}
                               className="p-1 text-green-600 hover:bg-green-100 rounded"
                               title="Save"
                             >
                               <Check className="w-4 h-4" />
                             </button>
                             <button
-                              onClick={() => handleCancelEdit(tag.id)}
+                              onClick={() => {
+                                // Discard buffered changes for this tag and exit edit mode
+                                setEditBuffer((prev) => {
+                                  const copy = { ...prev };
+                                  delete copy[tag.id];
+                                  return copy;
+                                });
+                                setEditingTag(null);
+                              }}
                               className="p-1 text-gray-600 hover:bg-gray-100 rounded"
                               title="Cancel"
                             >

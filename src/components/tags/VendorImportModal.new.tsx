@@ -108,12 +108,6 @@ export default function VendorImportModal({
       } else if (vendor === 'siemens') {
         if (format === 'csv') {
           result = await TagsAPI.importSiemensCsv(projectId, file);
-        } else if (format === 'xml') {
-          // Siemens PLCOpen XML
-          result = await TagsAPI.importSiemensXml(projectId, file);
-        } else if (format === 'xlsx') {
-          // If xlsx import is implemented on backend in future, call it here
-          throw new Error('XLSX import for Siemens is not implemented on the server');
         } else {
           throw new Error('Unsupported format for Siemens');
         }
@@ -129,31 +123,19 @@ export default function VendorImportModal({
         throw new Error('Unsupported vendor');
       }
 
-      // If server returned a structured result, surface errors and reports.
-      if (!result || result.success === false) {
-        // Server reported failure — attempt to show errors
-        setState(prev => ({
-          ...prev,
-          step: 'error',
-          importResult: result as any,
-          errorMessage: (result && (result as any).error) || 'Import failed on server'
-        }));
-        return;
-      }
-
-      // If there are row-level errors, ensure an errorReport exists for download
-      if (result.errors && result.errors.length > 0 && !result.errorReport) {
+      // Generate error report if there are errors
+      if (result.errors && result.errors.length > 0) {
         const errorRows = ['Row,Errors'];
-        result.errors.forEach((error) => {
+        result.errors.forEach(error => {
           errorRows.push(`${error.row},"${error.errors.join(', ')}"`);
         });
         result.errorReport = btoa(errorRows.join('\n'));
       }
 
-      setState(prev => ({
-        ...prev,
-        step: 'success',
-        importResult: result
+      setState(prev => ({ 
+        ...prev, 
+        step: 'success', 
+        importResult: result 
       }));
 
       if (onSuccess && result.inserted) {
@@ -212,15 +194,14 @@ export default function VendorImportModal({
         detectedVendors.push('beckhoff');
 
       if (detectedVendors.length === 1 && detectedFormat) {
-        // Single vendor and format detected - ask for confirmation before importing
+        // Single vendor and format detected - proceed with import
         setState(prev => ({
           ...prev,
-          // preselect the detected vendor and format but move to manual-select so user confirms
           selectedVendor: detectedVendors[0],
-          detectedVendors: detectedVendors,
-          detectedFormat: detectedFormat,
-          step: 'manual-select'
+          selectedFormat: detectedFormat,
+          step: 'progress'
         }));
+        await processImport(detectedVendors[0], detectedFormat, file);
       } else {
         // Multiple vendors or format not detected - manual selection needed
         setState(prev => ({
@@ -251,10 +232,6 @@ export default function VendorImportModal({
   };
 
   const selectedOption = importOptions.find(opt => opt.vendor === state.selectedVendor);
-  // Safe computed values for detected vendor/format to avoid undefined access in JSX
-  const detectedVendor = state.detectedVendors && state.detectedVendors.length > 0 ? state.detectedVendors[0] : undefined;
-  const detectedVendorDisplay = detectedVendor ? (importOptions.find(o => o.vendor === detectedVendor)?.displayName || detectedVendor) : undefined;
-  const detectedFormatStr = state.detectedFormat ? state.detectedFormat.toUpperCase() : undefined;
 
   return (
     <Modal
@@ -333,116 +310,76 @@ export default function VendorImportModal({
                 File Format Detection
               </h3>
               <p className="text-gray-600">
-                {state.detectedVendors?.length === 0
-                  ? "We couldn't identify your file's vendor/format. Please select the vendor and format manually:"
-                  : (detectedVendor && detectedFormatStr)
-                    ? `Detected vendor: ${detectedVendorDisplay} — format ${detectedFormatStr}. Please confirm to proceed.`
-                    : "Multiple possible vendors detected. Please confirm the correct vendor and format (other options are disabled until you change the file):"}
+                {state.detectedVendors?.length === 0 
+                  ? "We couldn't automatically identify your file's format. Please select the vendor and format manually:"
+                  : "Multiple possible vendors detected. Please confirm the correct vendor and format:"}
               </p>
             </div>
 
             <div className="space-y-4">
-              {/* If exactly one vendor+format was detected, present a compact confirmation UI
-                  and prevent selecting other vendors/formats. */}
-              {state.detectedVendors && state.detectedVendors.length === 1 && state.detectedFormat ? (
-                <div className="p-4 border rounded-lg bg-gray-50">
-                  <div className="mb-3">
-                    <div className="text-sm text-gray-600">Detected file</div>
-                    <div className="flex items-center justify-between mt-2">
-                      <div>
-                        <div className="font-medium text-gray-900">{importOptions.find(o => o.vendor === state.detectedVendors![0])?.displayName}</div>
-                        <div className="text-sm text-gray-600">Format: <span className="font-medium">{state.detectedFormat.toUpperCase()}</span></div>
-                      </div>
-                      <div className="text-xs text-green-700 bg-green-50 px-2 py-1 rounded">Detected</div>
-                    </div>
-                  </div>
-
-                  <div className="mt-2 text-sm text-gray-700">
-                    The importer detected the vendor and format for your file. Other vendors and formats are disabled to avoid accidental imports.
-                  </div>
-
-                  <div className="mt-4 flex items-center justify-end">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-3">
+                  Select Vendor
+                </label>
+                <div className="grid grid-cols-1 gap-3">
+                  {importOptions.map((option) => (
                     <button
-                      onClick={() => handleFormatSelect(state.detectedFormat!)}
-                      className="px-4 py-2 bg-primary text-white rounded-md hover:bg-primary-dark transition-colors"
+                      key={option.vendor}
+                      onClick={() => handleVendorSelect(option.vendor)}
+                      className={`
+                        p-4 border-2 rounded-lg text-left transition-all
+                        ${state.selectedVendor === option.vendor 
+                          ? 'border-primary bg-primary/5' 
+                          : 'border-gray-200 hover:border-gray-300'
+                        }
+                      `}
+                      disabled={state.detectedVendors && state.detectedVendors.length > 0 && !state.detectedVendors.includes(option.vendor)}
                     >
-                      Confirm & Import {state.detectedFormat.toUpperCase()}
+                      <div className="font-medium text-gray-900">
+                        {option.displayName}
+                      </div>
+                      <div className="text-sm text-gray-600 mt-1">
+                        {option.description}
+                      </div>
+                      {state.detectedVendors?.includes(option.vendor) && (
+                        <div className="text-xs text-green-600 mt-1">
+                          Detected in file
+                        </div>
+                      )}
                     </button>
-                  </div>
+                  ))}
+                </div>
+              </div>
 
-                  <div className="mt-4 grid grid-cols-1 gap-2 text-xs text-gray-500">
-                    {importOptions.filter(o => o.vendor !== state.detectedVendors![0]).map(o => (
-                      <div key={o.vendor} className="p-2 border rounded bg-white opacity-50">{o.displayName} — Not detected</div>
+              {state.selectedVendor && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-3">
+                    Select Format
+                  </label>
+                  <div className="grid grid-cols-2 gap-3">
+                    {selectedOption?.formats.map((format) => (
+                      <button
+                        key={format}
+                        onClick={() => handleFormatSelect(format)}
+                        className={`
+                          p-3 border-2 rounded-lg text-center font-medium transition-all
+                          ${state.selectedFormat === format 
+                            ? 'border-primary bg-primary text-white' 
+                            : 'border-gray-200 text-gray-700 hover:border-gray-300'
+                          }
+                        `}
+                        disabled={state.detectedFormat && state.detectedFormat !== format}
+                      >
+                        {format.toUpperCase()}
+                        {state.detectedFormat === format && (
+                          <div className="text-xs mt-1">
+                            Detected
+                          </div>
+                        )}
+                      </button>
                     ))}
                   </div>
                 </div>
-              ) : (
-                <>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-3">
-                      Select Vendor
-                    </label>
-                    <div className="grid grid-cols-1 gap-3">
-                      {importOptions.map((option) => (
-                        <button
-                          key={option.vendor}
-                          onClick={() => handleVendorSelect(option.vendor)}
-                          className={`
-                            p-4 border-2 rounded-lg text-left transition-all
-                            ${state.selectedVendor === option.vendor 
-                              ? 'border-primary bg-primary/5' 
-                              : 'border-gray-200 hover:border-gray-300'
-                            }
-                          `}
-                          disabled={state.detectedVendors && state.detectedVendors.length > 0 && !state.detectedVendors.includes(option.vendor)}
-                        >
-                          <div className="font-medium text-gray-900">
-                            {option.displayName}
-                          </div>
-                          <div className="text-sm text-gray-600 mt-1">
-                            {option.description}
-                          </div>
-                          {state.detectedVendors?.includes(option.vendor) && (
-                            <div className="text-xs text-green-600 mt-1">
-                              Detected in file
-                            </div>
-                          )}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-
-                  {state.selectedVendor && (
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-3">
-                        Select Format
-                      </label>
-                      <div className="grid grid-cols-2 gap-3">
-                        {selectedOption?.formats.map((format) => (
-                          <button
-                            key={format}
-                            onClick={() => handleFormatSelect(format)}
-                            className={`
-                              p-3 border-2 rounded-lg text-center font-medium transition-all
-                              ${state.selectedFormat === format 
-                                ? 'border-primary bg-primary text-white' 
-                                : 'border-gray-200 text-gray-700 hover:border-gray-300'
-                              }
-                            `}
-                            disabled={state.detectedFormat && state.detectedFormat !== format}
-                          >
-                            {format.toUpperCase()}
-                            {state.detectedFormat === format && (
-                              <div className="text-xs mt-1">
-                                Detected
-                              </div>
-                            )}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-                </>
               )}
             </div>
           </>
@@ -536,35 +473,10 @@ export default function VendorImportModal({
               <div className="text-gray-600 mb-2">
                 <strong>Error:</strong> {state.errorMessage}
               </div>
-            </div>
-
-            {/* If server returned row-level errors, show them and provide download */}
-            {state.importResult?.errors && state.importResult.errors.length > 0 && (
-              <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 text-left mb-4">
-                <div className="font-medium text-yellow-800 mb-2">
-                  {state.importResult.errors.length} rows had issues:
-                </div>
-                <div className="text-sm text-yellow-700 space-y-1 max-h-48 overflow-y-auto">
-                  {state.importResult.errors.map((error, idx) => (
-                    <div key={idx}>
-                      Row {error.row}: {error.errors.join(', ')}
-                    </div>
-                  ))}
-                </div>
-                {state.importResult.errorReport && (
-                  <div className="mt-3">
-                    <a
-                      href={`data:text/csv;base64,${state.importResult.errorReport}`}
-                      download="import-errors.csv"
-                      className="inline-flex items-center text-sm text-yellow-700 hover:text-yellow-800"
-                    >
-                      <Download className="w-4 h-4 mr-1" />
-                      Download Error Report
-                    </a>
-                  </div>
-                )}
+              <div className="text-sm text-gray-500 mb-6">
+                Please check your file format and try again, or contact support if the problem persists.
               </div>
-            )}
+            </div>
 
             <div className="flex justify-between">
               <button
@@ -573,20 +485,12 @@ export default function VendorImportModal({
               >
                 Close
               </button>
-              <div className="flex gap-2">
-                <button
-                  onClick={handleRetry}
-                  className="px-4 py-2 bg-primary text-white rounded-md hover:bg-primary-dark transition-colors"
-                >
-                  Try Again
-                </button>
-                <button
-                  onClick={handleReset}
-                  className="px-4 py-2 text-gray-700 bg-gray-100 rounded-md hover:bg-gray-200 transition-colors"
-                >
-                  Upload New File
-                </button>
-              </div>
+              <button
+                onClick={handleRetry}
+                className="px-4 py-2 bg-primary text-white rounded-md hover:bg-primary-dark transition-colors"
+              >
+                Try Again
+              </button>
             </div>
           </>
         )}

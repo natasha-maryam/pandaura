@@ -13,7 +13,7 @@ export interface Tag {
   user_id: string;
   name: string;
   description: string;
-  type: 'BOOL' | 'INT' | 'DINT' | 'REAL' | 'STRING' | 'TIMER' | 'COUNTER';
+  type: string; // Allow any string to support Beckhoff custom types
   data_type: string;
   address: string;
   default_value: string;
@@ -29,7 +29,7 @@ export interface CreateTagData {
   project_id: number;
   name: string;
   description: string;
-  type: 'BOOL' | 'INT' | 'DINT' | 'REAL' | 'STRING' | 'TIMER' | 'COUNTER';
+  type: string; // Allow any string for Beckhoff custom types
   data_type?: string;
   address: string;
   default_value?: string;
@@ -42,7 +42,7 @@ export interface CreateTagData {
 export interface UpdateTagData {
   name?: string;
   description?: string;
-  type?: 'BOOL' | 'INT' | 'DINT' | 'REAL' | 'STRING' | 'TIMER' | 'COUNTER';
+  type?: 'BOOL' | 'INT' | 'DINT' | 'REAL' | 'STRING';
   data_type?: string;
   address?: string;
   default_value?: string;
@@ -389,12 +389,9 @@ export class TagsAPI {
       body: formData,
     });
 
-    if (!response.ok) {
-      const error = await response.json().catch(() => ({ error: 'Network error' }));
-      throw new Error(error.error || 'Failed to import Beckhoff CSV');
-    }
-
-    return response.json();
+  // Always return parsed JSON so the caller can inspect errors and error reports.
+  const body = await response.json().catch(() => ({ success: false, error: 'Network error' }));
+  return body;
   }
 
   static async importBeckhoffXml(projectId: number, file: File): Promise<{
@@ -414,12 +411,8 @@ export class TagsAPI {
       body: formData,
     });
 
-    if (!response.ok) {
-      const error = await response.json().catch(() => ({ error: 'Network error' }));
-      throw new Error(error.error || 'Failed to import Beckhoff XML');
-    }
-
-    return response.json();
+  const body = await response.json().catch(() => ({ success: false, error: 'Network error' }));
+  return body;
   }
 
   // Rockwell import methods
@@ -440,12 +433,8 @@ export class TagsAPI {
       body: formData,
     });
 
-    if (!response.ok) {
-      const error = await response.json().catch(() => ({ error: 'Network error' }));
-      throw new Error(error.error || 'Failed to import Rockwell CSV');
-    }
-
-    return response.json();
+  const body = await response.json().catch(() => ({ success: false, error: 'Network error' }));
+  return body;
   }
 
   static async importRockwellL5X(projectId: number, file: File): Promise<{
@@ -465,12 +454,8 @@ export class TagsAPI {
       body: formData,
     });
 
-    if (!response.ok) {
-      const error = await response.json().catch(() => ({ error: 'Network error' }));
-      throw new Error(error.error || 'Failed to import Rockwell L5X');
-    }
-
-    return response.json();
+  const body = await response.json().catch(() => ({ success: false, error: 'Network error' }));
+  return body;
   }
 
   // Siemens import methods
@@ -491,9 +476,31 @@ export class TagsAPI {
       body: formData,
     });
 
+  const body = await response.json().catch(() => ({ success: false, error: 'Network error' }));
+  return body;
+  }
+
+
+  static async importSiemensXml(projectId: number, file: File): Promise<{
+    success: boolean;
+    inserted?: number;
+    errors?: Array<{ row: number; errors: string[]; raw: any }>;
+    processed?: number;
+  }> {
+    const formData = new FormData();
+    formData.append('file', file);
+
+    const response = await fetch(`${API_BASE_URL}/tags/projects/${projectId}/import/siemens/xml`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${localStorage.getItem('authToken')}`,
+      },
+      body: formData,
+    });
+
     if (!response.ok) {
       const error = await response.json().catch(() => ({ error: 'Network error' }));
-      throw new Error(error.error || 'Failed to import Siemens CSV');
+      throw new Error(error.error || 'Failed to import Siemens XML');
     }
 
     return response.json();
