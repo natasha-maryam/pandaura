@@ -46,17 +46,35 @@ class ErrorBoundary extends Component<Props, State> {
         return this.props.fallback;
       }
 
+      // Check if it's a context error
+      const isContextError = this.state.error?.message?.includes('useContext') || 
+                            this.state.error?.message?.includes('must be used within');
+
       return (
         <div className="min-h-[400px] flex items-center justify-center">
           <div className="text-center p-8 max-w-lg">
             <AlertCircle className="w-12 h-12 text-red-500 mx-auto mb-4" />
-            <h2 className="text-xl font-semibold text-gray-900 mb-2">Something went wrong</h2>
+            <h2 className="text-xl font-semibold text-gray-900 mb-2">
+              {isContextError ? 'Context Error' : 'Something went wrong'}
+            </h2>
             <div className="text-sm text-gray-600 mb-6">
-              <p className="mb-2">An error occurred while rendering this component.</p>
+              {isContextError ? (
+                <div>
+                  <p className="mb-2">A component is trying to access data that isn't available.</p>
+                  <p className="mb-2">This usually happens when a component is not properly wrapped with its required provider.</p>
+                </div>
+              ) : (
+                <p className="mb-2">An error occurred while rendering this component.</p>
+              )}
               {this.state.error && (
-                <pre className="text-left bg-gray-50 p-4 rounded-md overflow-auto text-xs">
-                  {this.state.error.toString()}
-                </pre>
+                <details className="mt-4">
+                  <summary className="cursor-pointer text-blue-600 hover:text-blue-800">
+                    Show error details
+                  </summary>
+                  <pre className="text-left bg-gray-50 p-4 rounded-md overflow-auto text-xs mt-2">
+                    {this.state.error.toString()}
+                  </pre>
+                </details>
               )}
             </div>
             <div className="space-x-4">

@@ -8,7 +8,7 @@ import AutoFixTooltip from "../pages/STEditor/AutoFixTooltip";
 import RefactorSuggestionBanner from "../pages/STEditor/RefactorSuggestionBanner";
 import SmartEditToolbar from "../pages/STEditor/SmartEditToolbar";
 import { useModuleState } from "../contexts/ModuleStateContext";
-import { useTagSyncOnly, useProjectSync } from "../contexts/ProjectSyncContext";
+import { useTagSyncOnly, useProjectSyncSafe } from "../contexts/ProjectSyncContext";
 import { useProjectAutosave } from "../components/projects/hooks";
 import { useProjectNavigationProtection } from "../hooks/useNavigationProtection";
 import { useVersionControl } from "../hooks/useVersionControl";
@@ -50,8 +50,11 @@ export default function LogicStudio({ sessionMode = false }: LogicStudioProps) {
     connectionAttempts
   } = useTagSyncOnly();
 
-  // Get full project sync context
-  const { currentProjectId, loadExistingTags, latestTags } = useProjectSync();
+  // Get full project sync context (safely)
+  const projectSyncContext = useProjectSyncSafe();
+  const currentProjectId = projectSyncContext?.currentProjectId || null;
+  const loadExistingTags = projectSyncContext?.loadExistingTags || (() => Promise.resolve([]));
+  const latestTags = projectSyncContext?.latestTags || [];
 
   // Debug connection state
   useEffect(() => {
@@ -68,7 +71,7 @@ export default function LogicStudio({ sessionMode = false }: LogicStudioProps) {
       console.log(`📂 Loading existing tags for project ${currentProjectId}`);
       loadedProjectRef.current = currentProjectId;
 
-      loadExistingTags().then(tags => {
+      loadExistingTags().then((tags: any[]) => {
         if (tags.length > 0) {
           console.log(`📂 Found ${tags.length} existing tags:`, tags);
 
@@ -100,7 +103,7 @@ END_PROGRAM`;
           lastSyncedCodeRef.current = emptyProgramCode; // Prevent immediate sync
           console.log(`📂 Set editor to empty PROGRAM structure`);
         }
-      }).catch(error => {
+      }).catch((error: any) => {
         console.error('Failed to load existing tags:', error);
         // Reset on error so we can try again
         loadedProjectRef.current = null;
@@ -179,7 +182,7 @@ END_PROGRAM`);
       const codeVariables = matches.map(match => match[1]);
 
       // Check if any variables in code don't exist in current tags
-      const existingTagNames = latestTags.map(tag => tag.name);
+      const existingTagNames = latestTags.map((tag: any) => tag.name);
       const newVariables = codeVariables.filter(varName => !existingTagNames.includes(varName));
 
       if (newVariables.length > 0) {
@@ -546,7 +549,7 @@ END_PROGRAM`;
             <button
               onClick={() => {
                 console.log('🔄 Refreshing tags from database...');
-                loadExistingTags().then(tags => {
+                loadExistingTags().then((tags: any[]) => {
                   if (tags.length > 0) {
                     const generatedSTCode = tagsToSTCodeWithScopes(tags);
                     setEditorCode(generatedSTCode);
@@ -565,7 +568,7 @@ END_PROGRAM`;
                     lastSyncedCodeRef.current = emptyProgramCode;
                     console.log('🔄 No tags found, set empty program structure');
                   }
-                }).catch(error => {
+                }).catch((error: any) => {
                   console.error('Failed to refresh tags:', error);
                 });
               }}

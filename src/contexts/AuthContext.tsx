@@ -77,6 +77,8 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
   // Initialize authentication state from localStorage
   useEffect(() => {
+    let isMounted = true; // Prevent state updates if component unmounts
+    
     console.log('🔍 AuthContext: Initializing authentication state');
     const storedToken = localStorage.getItem('authToken');
     const storedUser = localStorage.getItem('authUser');
@@ -96,16 +98,18 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         console.log('🔍 AuthContext: Restoring authentication state');
         const userData = JSON.parse(storedUser);
         
-        // Set user and token immediately
-        setUser(userData);
-        setToken(storedToken);
-        
-        if (storedOrgs) {
-          setOrganizations(JSON.parse(storedOrgs));
-        }
-        
-        if (storedSelectedOrg) {
-          setSelectedOrg(JSON.parse(storedSelectedOrg));
+        // Only set state if component is still mounted and no current user
+        if (isMounted && !user) {
+          setUser(userData);
+          setToken(storedToken);
+          
+          if (storedOrgs) {
+            setOrganizations(JSON.parse(storedOrgs));
+          }
+          
+          if (storedSelectedOrg) {
+            setSelectedOrg(JSON.parse(storedSelectedOrg));
+          }
         }
         
         console.log('🔍 AuthContext: Authentication state restored successfully', {
@@ -114,19 +118,27 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         });
       } catch (error) {
         console.error('Failed to restore auth state:', error);
-        // Clear corrupted data
-        localStorage.removeItem('authToken');
-        localStorage.removeItem('authUser');
-        localStorage.removeItem('authOrgs');
-        localStorage.removeItem('authSelectedOrg');
+        // Clear corrupted data only if still mounted
+        if (isMounted) {
+          localStorage.removeItem('authToken');
+          localStorage.removeItem('authUser');
+          localStorage.removeItem('authOrgs');
+          localStorage.removeItem('authSelectedOrg');
+        }
       }
     } else {
       console.log('🔍 AuthContext: No stored authentication data found');
     }
     
-    // Set loading to false only after attempting to restore auth state
-    setIsLoading(false);
-  }, []);
+    // Set loading to false only after attempting to restore auth state and if still mounted
+    if (isMounted) {
+      setIsLoading(false);
+    }
+
+    return () => {
+      isMounted = false; // Cleanup function to prevent state updates
+    };
+  }, []); // Remove dependencies to prevent re-initialization
 
   const login = async (email: string, password: string, twoFactorToken?: string) => {
     try {
@@ -315,11 +327,26 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   };
 
   const setupTwoFactor = async () => {
-    const response = await axios.post('/auth/setup-2fa');
-    return {
-      secret: response.data.secret,
-      qrCodeUrl: response.data.otpauth_url
-    };
+    try {
+      // Ensure we have a current token
+      const currentToken = token || localStorage.getItem('authToken');
+      if (!currentToken) {
+        throw new Error('No authentication token available');
+      }
+
+      const response = await axios.post('/auth/setup-2fa', {}, {
+        headers: {
+          'Authorization': `Bearer ${currentToken}`
+        }
+      });
+      return {
+        secret: response.data.secret,
+        qrCodeUrl: response.data.qrCode || response.data.otpauth_url
+      };
+    } catch (error: any) {
+      console.error('Setup 2FA error:', error);
+      throw new Error(error.response?.data?.error || 'Failed to setup 2FA');
+    }
   };
 
   const verifyTwoFactor = async (token: string) => {

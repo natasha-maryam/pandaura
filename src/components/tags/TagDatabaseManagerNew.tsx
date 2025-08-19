@@ -26,7 +26,6 @@ import Modal from "../ui/Modal";
 import Button from "../ui/Button";
 import { useTagSyncOnly } from "../../contexts/ProjectSyncContext";
 import { TagSyncResponse } from "../../hooks/useTagSync";
-
 import {
   validateTagTypeForVendor,
   validateAddressForVendor,
@@ -47,6 +46,18 @@ const TagDatabaseManagerContent: React.FC<TagDatabaseManagerProps> = ({
   const { projectId: urlProjectId } = useParams<{ projectId: string }>();
   const navigate = useNavigate();
   const { showToast } = useToast();
+
+  // // Tag sync functionality - safely handle when not in ProjectSyncProvider
+  // const {
+  //   isConnected,
+  //   isConnecting,
+  //   lastError: syncError,
+  //   lastSyncTime,
+  //   queuedSyncs,
+  //   latestTags,
+  //   onTagsUpdated,
+  //   offTagsUpdated,
+  // } = useTagSyncOnly();
 
   // Check if we're in project workspace mode
   const isProjectWorkspace = window.location.pathname.startsWith("/workspace/");

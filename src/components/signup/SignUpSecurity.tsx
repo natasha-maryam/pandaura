@@ -17,7 +17,7 @@ export default function SignUpSecurity({
   onSecurityData,
 }: SignUpSecurityProps) {
   const { signUpData, updateSignUpData } = useSignUp();
-  const { setupTwoFactor, verifyTwoFactor, login, logout } = useAuth();
+  const { setupTwoFactor, verifyTwoFactor, login, logout, isAuthenticated, token } = useAuth();
   const { showToast } = useToast();
   
   const [method, setMethod] = useState<"totp" | "sms" | null>(
@@ -48,25 +48,52 @@ export default function SignUpSecurity({
       return;
     }
 
+    // Check if organization was created (for new org creation flow)
+    if (signUpData.orgChoice === 'create' && !signUpData.organizationCreated) {
+      setError("Organization not yet created. Please go back and complete the previous step.");
+      return;
+    }
+
     setIsSettingUp(true);
-    setIsAuthenticating(true);
     setError("");
     
     try {
-      // First, temporarily authenticate the user to get access token
-      const loginResult = await login(
-        signUpData.accountData.email, 
-        signUpData.accountData.password
-      );
+      // Check if user is already authenticated from organization creation
+      let needsLogin = !isAuthenticated || !token;
+      
+      console.log('🔍 Authentication check:', {
+        isAuthenticated,
+        hasToken: !!token,
+        orgChoice: signUpData.orgChoice,
+        organizationCreated: signUpData.organizationCreated,
+        needsLogin
+      });
+      
+      if (needsLogin) {
+        setIsAuthenticating(true);
+        console.log('🔐 User not authenticated, logging in...');
+        
+        // First, temporarily authenticate the user to get access token
+        const loginResult = await login(
+          signUpData.accountData.email, 
+          signUpData.accountData.password
+        );
 
-      if (!loginResult.success) {
-        throw new Error(loginResult.message || 'Failed to authenticate');
+        if (!loginResult.success) {
+          throw new Error(loginResult.message || 'Failed to authenticate');
+        }
+        
+        setIsAuthenticating(false);
+        console.log('✅ Login successful for 2FA setup');
+      } else {
+        console.log('✅ User already authenticated, proceeding with 2FA setup');
       }
 
-      setIsAuthenticating(false);
-
       // Now set up 2FA
+      console.log('🔒 Calling setupTwoFactor...');
       const result = await setupTwoFactor();
+      console.log('✅ setupTwoFactor result:', result);
+      
       setSecret(result.secret);
       setQrCodeUrl(result.qrCodeUrl);
       
@@ -86,6 +113,12 @@ export default function SignUpSecurity({
       });
     } catch (error: any) {
       console.error('2FA setup error:', error);
+      console.error('Error details:', {
+        message: error.message,
+        response: error.response?.data,
+        status: error.response?.status,
+        config: error.config
+      });
       setSetupAttempts(prev => prev + 1);
       setError(error.message || 'Failed to setup 2FA. Please try again.');
       showToast({

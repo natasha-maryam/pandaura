@@ -230,19 +230,44 @@ export function ProjectSyncProvider({ children }: ProjectSyncProviderProps) {
 export function useProjectSync(): ProjectSyncContextType {
   const context = useContext(ProjectSyncContext);
   if (context === undefined) {
-    throw new Error('useProjectSync must be used within a ProjectSyncProvider');
+    throw new Error('useProjectSync must be used within a ProjectSyncProvider. Make sure this component is wrapped with <ProjectSyncProvider>.');
   }
   return context;
 }
 
-// Hook for components that only need project ID
-export function useCurrentProject() {
-  const { currentProjectId } = useProjectSync();
-  return { currentProjectId };
+// Safe version that returns null if not in provider
+export function useProjectSyncSafe(): ProjectSyncContextType | null {
+  return useContext(ProjectSyncContext) || null;
 }
 
-// Hook for components that only need tag sync functionality
+// Hook for components that only need project ID
+export function useCurrentProject() {
+  const context = useProjectSyncSafe();
+  return { currentProjectId: context?.currentProjectId || null };
+}
+
+// Safe hook for components that only need tag sync functionality
 export function useTagSyncOnly() {
+  const context = useProjectSyncSafe();
+  
+  if (!context) {
+    // Return default values when not in a ProjectSyncProvider
+    return {
+      isConnected: false,
+      isConnecting: false,
+      lastError: null,
+      lastSyncTime: null,
+      queuedSyncs: 0,
+      syncTags: () => console.warn('useTagSyncOnly: Not connected to ProjectSyncProvider'),
+      latestTags: [],
+      onTagsUpdated: () => {},
+      offTagsUpdated: () => {},
+      connect: () => console.warn('useTagSyncOnly: Not connected to ProjectSyncProvider'),
+      disconnect: () => console.warn('useTagSyncOnly: Not connected to ProjectSyncProvider'),
+      connectionAttempts: 0
+    };
+  }
+
   const {
     isConnected,
     isConnecting,
@@ -256,7 +281,7 @@ export function useTagSyncOnly() {
     connect,
     disconnect,
     connectionAttempts
-  } = useProjectSync();
+  } = context;
 
   return {
     isConnected,
