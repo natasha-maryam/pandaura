@@ -1,12 +1,10 @@
 
-import React, { useState, useEffect } from "react";
+import  { useState, useEffect } from "react";
 import { ArrowLeft, Shield, Monitor, AlertCircle, CheckCircle, RefreshCw } from "lucide-react";
-import { Button, Input } from "../ui";
-import { useAuth } from "../../contexts/AuthContext";
+import { Button } from "../ui";
 import { useSignUp } from "../../contexts/SignUpContext";
 import { useToast } from "../ui/Toast";
 import { config } from "../../config/environment";
-import logo from "../../assets/logo.png";
 
 function generateInstanceId() {
   // Generate a unique instance ID for this browser/device
@@ -57,7 +55,6 @@ export default function SignUpEnvironment({
   onEnvironmentData 
 }: SignUpEnvironmentProps) {
   const { signUpData, updateSignUpData } = useSignUp();
-  const { bindDevice } = useAuth();
   const { showToast } = useToast();
   
   const [instanceId, setInstanceId] = useState(signUpData.environmentData?.instanceId || "");
@@ -93,8 +90,8 @@ export default function SignUpEnvironment({
     setError("");
     
     try {
-      // For signup flow, we'll use a special signup device binding
-      // that doesn't require full authentication
+      console.log("Starting device binding for email:", signUpData.accountData?.email);
+      
       const response = await fetch(`${config.apiBaseUrl}/api/v1/auth/signup-device-bind`, {
         method: 'POST',
         headers: {
@@ -102,10 +99,8 @@ export default function SignUpEnvironment({
         },
         body: JSON.stringify({
           instanceId,
-          fingerprint,
-          email: signUpData.accountData?.email,
-          signupToken: 'temp-signup-' + Date.now(), // Temporary token for signup
-          isOrgCreator,
+          deviceFingerprintHash: fingerprint,
+          email: signUpData.accountData?.email
         }),
       });
 

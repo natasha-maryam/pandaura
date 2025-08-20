@@ -228,12 +228,13 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       setToken(newToken);
       
       // Set user data
-      setUser({
+      const userData = {
         userId,
         fullName: orgData.fullName,
         email: orgData.email,
         twoFactorEnabled: false
-      });
+      };
+      setUser(userData);
 
       // Create organization data
       const newOrg: OrgInfo = {
@@ -246,6 +247,11 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
       setOrganizations([newOrg]);
       setSelectedOrg(newOrg);
+
+      // Persist user data to localStorage
+      localStorage.setItem('authUser', JSON.stringify(userData));
+      localStorage.setItem('authOrgs', JSON.stringify([newOrg]));
+      localStorage.setItem('authSelectedOrg', JSON.stringify(newOrg));
 
       return { success: true, message: 'Organization created successfully' };
     } catch (error: any) {
@@ -290,12 +296,13 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       setToken(newToken);
       
       // Set basic user data
-      setUser({
+      const userData = {
         userId,
         fullName: inviteData.fullName,
         email: inviteData.email,
         twoFactorEnabled: false
-      });
+      };
+      setUser(userData);
 
       // Fetch complete user's organizations data
       const orgsResponse = await axios.get(`/auth/users/${userId}/orgs`, {
@@ -315,6 +322,11 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       // Set selected org to the primary one from invite
       const primaryOrg = formattedOrgs.find((org: OrgInfo) => org.org_id === orgId) || formattedOrgs[0];
       setSelectedOrg(primaryOrg);
+
+      // Persist data to localStorage
+      localStorage.setItem('authUser', JSON.stringify(userData));
+      localStorage.setItem('authOrgs', JSON.stringify(formattedOrgs));
+      localStorage.setItem('authSelectedOrg', JSON.stringify(primaryOrg));
 
       return { success: true, message: 'Successfully joined organization' };
     } catch (error: any) {
