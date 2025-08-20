@@ -8,6 +8,11 @@ import { debugConfig } from './config/environment'
 // Debug environment on startup
 debugConfig()
 
+// Import auth storage test in development
+if (import.meta.env.DEV) {
+  import('./utils/testAuthStorage');
+}
+
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
     <App />

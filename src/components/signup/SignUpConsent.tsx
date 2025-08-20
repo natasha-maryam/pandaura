@@ -1,5 +1,4 @@
-import React, { useState, useEffect } from "react";
-import { useModuleState } from "../../contexts/ModuleStateContext";
+import React, { useState } from "react";
 import { useSignUp } from "../../contexts/SignUpContext";
 import logo from "../../assets/logo.png";
 
@@ -67,7 +66,7 @@ export default function SignUpConsent({
                 type="checkbox"
                 checked={consent1}
                 onChange={(e) => setConsent1(e.target.checked)}
-                className="accent-accent w-5 h-5 mt-1"
+                className="accent-accent w-[15px] h-[15px] mt-1"
               />
               <span className="text-primary text-base">
                 I acknowledge Pandaura AS uses role-based access and activity
@@ -85,7 +84,7 @@ export default function SignUpConsent({
                 type="checkbox"
                 checked={consent2}
                 onChange={(e) => setConsent2(e.target.checked)}
-                className="accent-accent w-5 h-5 mt-1"
+                className="accent-accent w-[15px] h-[15px] mt-1"
               />
               <span className="text-primary text-base">
                 I agree to the End User License Agreement.
@@ -96,7 +95,7 @@ export default function SignUpConsent({
             href="/eula"
             target="_blank"
             rel="noopener noreferrer"
-            className="text-accent underline ml-2 text-sm"
+            className="text-[#9090ee] underline ml-2 text-sm"
           >
             View EULA
           </a>

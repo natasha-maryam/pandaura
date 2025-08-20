@@ -94,9 +94,11 @@ export const SignUpProvider: React.FC<{ children: ReactNode }> = ({ children }) 
     signUpData.accountData?.email &&
     signUpData.accountData?.password &&
     (signUpData.orgChoice === 'join' ? signUpData.inviteData : signUpData.orgData) &&
-    signUpData.securityData &&
+    signUpData.securityData?.verified &&
     signUpData.consentData?.termsAccepted &&
-    signUpData.consentData?.privacyAccepted
+    signUpData.consentData?.privacyAccepted &&
+    signUpData.environmentData &&
+    signUpData.organizationCreated
   );
 
   return (

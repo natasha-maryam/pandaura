@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import SignUpWelcome from '../components/signup/SignUpWelcome';
 import SignUpOrgChoice from '../components/signup/SignUpOrgChoice';
@@ -14,9 +14,21 @@ import { useSignUp } from '../contexts/SignUpContext';
 export default function SignUp() {
   const [step, setStep] = useState(0);
   const [isLoading, setIsLoading] = useState(false);
-  const { createOrganization, acceptInvite, login } = useAuth();
-  const { signUpData, updateSignUpData, clearSignUpData } = useSignUp();
+  const { createOrganization, acceptInvite, login, isAuthenticated, isLoading: authLoading } = useAuth();
+  const { signUpData, updateSignUpData, clearSignUpData, isComplete } = useSignUp();
   const navigate = useNavigate();
+
+  // No automatic redirect - user must manually click "Go to Dashboard" on final step
+  // This effect is only for handling authentication state, not signup completion
+  useEffect(() => {
+    if (!authLoading && !isAuthenticated) {
+      console.log('🔍 SignUp: User not authenticated, staying in signup flow');
+      // User not authenticated - normal signup flow - no action needed
+    } else if (!authLoading && isAuthenticated && signUpData.orgChoice) {
+      console.log('🔍 SignUp: User is authenticated and in signup flow, continuing with steps');
+      // User is authenticated and in signup flow - let them continue through steps
+    }
+  }, [isAuthenticated, authLoading, signUpData.orgChoice]);
 
   const nextStep = () => setStep((s) => s + 1);
   const prevStep = () => setStep((s) => Math.max(s - 1, 0));
@@ -48,6 +60,21 @@ export default function SignUp() {
     updateSignUpData('environmentData', data);
   };
 
+  // Helper function to clear all signup-related data including localStorage
+  const clearAllSignUpData = () => {
+    console.log('🧹 SignUp: Clearing all signup data including localStorage for future sessions');
+    
+    // Clear the signup context data
+    clearSignUpData();
+    
+    // Clear signup-related localStorage items so next signup starts fresh
+    localStorage.removeItem('pandaura_instance_id');
+    
+    console.log('✅ SignUp: All signup data cleared - form will be empty on next visit');
+    
+    // Note: We keep authentication cookies and other app data intact
+  };
+
   const handleSubmitSignUp = async () => {
     if (!signUpData.accountData) {
       throw new Error('Account data is required');
@@ -57,16 +84,16 @@ export default function SignUp() {
     
     try {
       // At this point, user and organization should already be created
-      // We just need to do a final login to establish the session
+      // We just need to complete the signup flow
       if (signUpData.organizationCreated) {
         // Everything is already set up (organization created, user created, 2FA setup, consent agreed, device binded)
-        // Just clear the signup data and navigate to home
-        clearSignUpData();
-        navigate("/home");
+        // User should already be authenticated, just clear all signup data and navigate
+        clearAllSignUpData();
+        navigate("/home", { replace: true });
         return; // Exit the function here to prevent further execution
       }
 
-      // Fallback for any remaining creation logic
+      // Fallback for any remaining creation logic (should not normally reach here)
       if (signUpData.orgChoice === 'create') {
         if (!signUpData.orgData) {
           throw new Error('Organization data is required');
@@ -82,8 +109,8 @@ export default function SignUp() {
         });
 
         if (result.success) {
-          clearSignUpData();
-          navigate('/home');
+          clearAllSignUpData();
+          navigate('/home', { replace: true });
         } else {
           throw new Error(result.message || 'Failed to create organization');
         }
@@ -101,8 +128,8 @@ export default function SignUp() {
         });
 
         if (result.success) {
-          clearSignUpData();
-          navigate('/home');
+          clearAllSignUpData();
+          navigate('/home', { replace: true });
         } else {
           throw new Error(result.message || 'Failed to join organization');
         }
@@ -111,6 +138,7 @@ export default function SignUp() {
       console.error('Sign up error:', error);
       // Handle error - you might want to show an error message
       alert('Sign up failed. Please try again.');
+    } finally {
       setIsLoading(false);
     }
   };

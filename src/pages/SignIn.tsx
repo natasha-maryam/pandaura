@@ -25,7 +25,14 @@ type SignInStep = 'credentials' | 'twoFactor' | 'orgSelection' | 'complete';
 
 export default function SignInPage() {
   const navigate = useNavigate();
-  const { login, setSelectedOrg, organizations: contextOrganizations } = useAuth();
+  const { login, setSelectedOrg, organizations: contextOrganizations, isAuthenticated, isLoading: authLoading } = useAuth();
+
+  // Only redirect if already authenticated (this shouldn't interfere with signup flow)
+  useEffect(() => {
+    if (!authLoading && isAuthenticated) {
+      navigate('/home', { replace: true });
+    }
+  }, [isAuthenticated, authLoading, navigate]);
 
   // Form state
   const [email, setEmail] = useState("");

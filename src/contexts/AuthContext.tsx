@@ -1,5 +1,6 @@
 import React, { createContext, useState, useEffect, useContext, ReactNode } from 'react';
 import axios from 'axios';
+import { authStorage } from '../utils/authStorage';
 
 export interface OrgInfo {
   org_id: string;
@@ -23,7 +24,7 @@ interface AuthContextType {
   selectedOrg: OrgInfo | null;
   isAuthenticated: boolean;
   isLoading: boolean;
-  setSelectedOrg: (org: OrgInfo) => void;
+  setSelectedOrg: (org: OrgInfo | null) => void;
   login: (email: string, password: string, twoFactorToken?: string) => Promise<{ requiresTwoFactor?: boolean; success: boolean; message?: string }>;
   logout: () => void;
   createOrganization: (orgData: any) => Promise<{ success: boolean; message?: string }>;
@@ -46,10 +47,21 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const [user, setUser] = useState<User | null>(null);
   const [token, setToken] = useState<string | null>(null);
   const [organizations, setOrganizations] = useState<OrgInfo[]>([]);
-  const [selectedOrg, setSelectedOrg] = useState<OrgInfo | null>(null);
+  const [selectedOrgState, setSelectedOrgState] = useState<OrgInfo | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [isInitialized, setIsInitialized] = useState(false);
 
   const isAuthenticated = !!token && !!user;
+
+  // Custom setSelectedOrg that also persists to cookies
+  const setSelectedOrg = (org: OrgInfo | null) => {
+    setSelectedOrgState(org);
+    if (org) {
+      authStorage.setSelectedOrg(org);
+    } else {
+      authStorage.removeSelectedOrg();
+    }
+  };
 
   // Debug authentication state changes
   useEffect(() => {
@@ -64,78 +76,105 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
   // Set axios auth header when token changes
   useEffect(() => {
+    console.log('🔍 AuthContext: Token effect triggered, token:', token ? `${token.substring(0, 10)}...` : 'null', 'isInitialized:', isInitialized);
+    
     if (token) {
       axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
-      // Persist token to localStorage
-      localStorage.setItem('authToken', token);
-    } else {
+      // Persist token to cookies
+      console.log('🔍 AuthContext: Setting token to cookies...');
+      authStorage.setToken(token);
+    } else if (isInitialized) {
+      // Only remove token from cookies if we're not in the initialization phase
       delete axios.defaults.headers.common['Authorization'];
-      // Remove token from localStorage
-      localStorage.removeItem('authToken');
+      console.log('🔍 AuthContext: Removing token from cookies (post-initialization)...');
+      authStorage.removeToken();
+    } else {
+      // During initialization, just remove the header but don't touch cookies yet
+      delete axios.defaults.headers.common['Authorization'];
+      console.log('🔍 AuthContext: Removing auth header only (during initialization)...');
     }
-  }, [token]);
+  }, [token, isInitialized]);
 
-  // Initialize authentication state from localStorage
+  // Initialize authentication state from cookies
   useEffect(() => {
     let isMounted = true; // Prevent state updates if component unmounts
     
-    console.log('🔍 AuthContext: Initializing authentication state');
-    const storedToken = localStorage.getItem('authToken');
-    const storedUser = localStorage.getItem('authUser');
-    const storedOrgs = localStorage.getItem('authOrgs');
-    const storedSelectedOrg = localStorage.getItem('authSelectedOrg');
+    console.log('🔍 AuthContext: Starting initialization...');
+    const storedToken = authStorage.getToken();
+    const storedUser = authStorage.getUser();
+    const storedOrgs = authStorage.getOrganizations();
+    const storedSelectedOrg = authStorage.getSelectedOrg();
 
-    console.log('🔍 AuthContext: Stored data found:', {
+    console.log('🔍 AuthContext: Raw cookie data:', {
+      storedToken,
+      storedUser,
+      storedOrgs,
+      storedSelectedOrg
+    });
+
+    console.log('🔍 AuthContext: Stored data analysis:', {
       hasToken: !!storedToken,
       hasUser: !!storedUser,
-      hasOrgs: !!storedOrgs,
+      hasOrgs: storedOrgs && storedOrgs.length > 0,
       hasSelectedOrg: !!storedSelectedOrg,
-      tokenPrefix: storedToken ? `${storedToken.substring(0, 10)}...` : 'none'
+      tokenPrefix: storedToken ? `${storedToken.substring(0, 10)}...` : 'none',
+      userEmail: storedUser?.email || 'none'
     });
 
     if (storedToken && storedUser) {
       try {
-        console.log('🔍 AuthContext: Restoring authentication state');
-        const userData = JSON.parse(storedUser);
+        console.log('🔍 AuthContext: Attempting to restore authentication state...');
         
-        // Only set state if component is still mounted and no current user
-        if (isMounted && !user) {
-          setUser(userData);
+        // Only set state if component is still mounted
+        if (isMounted) {
+          console.log('🔍 AuthContext: Setting user state...');
+          setUser(storedUser);
+          
+          console.log('🔍 AuthContext: Setting token state...');
           setToken(storedToken);
           
-          if (storedOrgs) {
-            setOrganizations(JSON.parse(storedOrgs));
+          if (storedOrgs && storedOrgs.length > 0) {
+            console.log('🔍 AuthContext: Setting organizations state...');
+            setOrganizations(storedOrgs);
           }
           
           if (storedSelectedOrg) {
-            setSelectedOrg(JSON.parse(storedSelectedOrg));
+            console.log('🔍 AuthContext: Setting selected org state...');
+            setSelectedOrgState(storedSelectedOrg);
           }
+          
+          console.log('🔍 AuthContext: State restoration complete');
         }
         
         console.log('🔍 AuthContext: Authentication state restored successfully', {
-          userEmail: userData.email,
-          userId: userData.userId
+          userEmail: storedUser.email,
+          userId: storedUser.userId,
+          isAuthenticated: !!(storedToken && storedUser)
         });
       } catch (error) {
-        console.error('Failed to restore auth state:', error);
+        console.error('❌ Failed to restore auth state:', error);
         // Clear corrupted data only if still mounted
         if (isMounted) {
-          localStorage.removeItem('authToken');
-          localStorage.removeItem('authUser');
-          localStorage.removeItem('authOrgs');
-          localStorage.removeItem('authSelectedOrg');
+          console.log('🧹 Clearing corrupted auth data...');
+          authStorage.clearAll();
         }
       }
     } else {
-      console.log('🔍 AuthContext: No stored authentication data found');
+      console.log('🔍 AuthContext: No stored authentication data found', {
+        missingToken: !storedToken,
+        missingUser: !storedUser
+      });
     }
     
     // Set loading to false only after attempting to restore auth state and if still mounted
     if (isMounted) {
+      console.log('🔍 AuthContext: Setting loading to false and marking as initialized');
       setIsLoading(false);
+      setIsInitialized(true);
     }
 
     return () => {
+      console.log('🔍 AuthContext: Cleanup called');
       isMounted = false; // Cleanup function to prevent state updates
     };
   }, []); // Remove dependencies to prevent re-initialization
@@ -167,7 +206,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       // Set token first
       setToken(newToken);
       
-      // Set user data and persist to localStorage
+      // Set user data and persist to cookies
       const userData = {
         userId,
         fullName: fullName || '',
@@ -175,7 +214,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         twoFactorEnabled: twoFactorEnabled || false
       };
       setUser(userData);
-      localStorage.setItem('authUser', JSON.stringify(userData));
+      authStorage.setUser(userData);
 
       // Format and set organizations data
       const formattedOrgs = userOrgs.map((org: any) => ({
@@ -187,12 +226,12 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       }));
 
       setOrganizations(formattedOrgs);
-      localStorage.setItem('authOrgs', JSON.stringify(formattedOrgs));
+      authStorage.setOrganizations(formattedOrgs);
       
       // Set selected org to the primary one from login response
       const primaryOrg = formattedOrgs.find((org: OrgInfo) => org.org_id === orgId) || formattedOrgs[0];
-      setSelectedOrg(primaryOrg);
-      localStorage.setItem('authSelectedOrg', JSON.stringify(primaryOrg));
+      setSelectedOrgState(primaryOrg);
+      authStorage.setSelectedOrg(primaryOrg);
 
       return { success: true, message: 'Login successful' };
     } catch (error: any) {
@@ -205,10 +244,16 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   };
 
   const logout = () => {
+    console.log('🔍 AuthContext: Logging out user');
     setToken(null);
     setUser(null);
     setOrganizations([]);
-    setSelectedOrg(null);
+    setSelectedOrgState(null);
+    
+    // Clear all auth cookies
+    authStorage.clearAll();
+    
+    console.log('🔍 AuthContext: Logout complete, cookies cleared');
   };
 
   const createOrganization = async (orgData: {
@@ -246,12 +291,12 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       };
 
       setOrganizations([newOrg]);
-      setSelectedOrg(newOrg);
+      setSelectedOrgState(newOrg);
 
-      // Persist user data to localStorage
-      localStorage.setItem('authUser', JSON.stringify(userData));
-      localStorage.setItem('authOrgs', JSON.stringify([newOrg]));
-      localStorage.setItem('authSelectedOrg', JSON.stringify(newOrg));
+      // Persist user data to cookies
+      authStorage.setUser(userData);
+      authStorage.setOrganizations([newOrg]);
+      authStorage.setSelectedOrg(newOrg);
 
       return { success: true, message: 'Organization created successfully' };
     } catch (error: any) {
@@ -321,12 +366,12 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       
       // Set selected org to the primary one from invite
       const primaryOrg = formattedOrgs.find((org: OrgInfo) => org.org_id === orgId) || formattedOrgs[0];
-      setSelectedOrg(primaryOrg);
+      setSelectedOrgState(primaryOrg);
 
-      // Persist data to localStorage
-      localStorage.setItem('authUser', JSON.stringify(userData));
-      localStorage.setItem('authOrgs', JSON.stringify(formattedOrgs));
-      localStorage.setItem('authSelectedOrg', JSON.stringify(primaryOrg));
+      // Persist data to cookies
+      authStorage.setUser(userData);
+      authStorage.setOrganizations(formattedOrgs);
+      authStorage.setSelectedOrg(primaryOrg);
 
       return { success: true, message: 'Successfully joined organization' };
     } catch (error: any) {
@@ -340,8 +385,8 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
   const setupTwoFactor = async () => {
     try {
-      // Ensure we have a current token
-      const currentToken = token || localStorage.getItem('authToken');
+      // Ensure we have a current token - use cookies instead of localStorage
+      const currentToken = token || authStorage.getToken();
       if (!currentToken) {
         throw new Error('No authentication token available');
       }
@@ -397,7 +442,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         user,
         token,
         organizations,
-        selectedOrg,
+        selectedOrg: selectedOrgState,
         isAuthenticated,
         isLoading,
         setSelectedOrg,

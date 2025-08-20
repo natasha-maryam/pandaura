@@ -166,8 +166,8 @@ export default function SignUpSecurity({
         updateSignUpData('securityData', securityData);
         onSecurityData(securityData);
 
-        // Logout the temporary session since 2FA is now set up
-        logout();
+        // Keep the user logged in after 2FA setup during signup
+        // No need to logout as the user should remain authenticated
 
         showToast({
           variant: 'success',
@@ -375,7 +375,7 @@ export default function SignUpSecurity({
                     </div>
                   </div>
                   
-                  <div className="space-y-2">
+                  {/* <div className="space-y-2">
                     <button
                       onClick={() => setShowManualSecret(!showManualSecret)}
                       className="text-sm text-accent hover:text-accent-dark underline"
@@ -388,7 +388,7 @@ export default function SignUpSecurity({
                         <p className="font-mono text-sm bg-white px-3 py-2 rounded border break-all">{secret}</p>
                       </div>
                     )}
-                  </div>
+                  </div> */}
 
                   {setupAttempts > 0 && setupAttempts < 3 && (
                     <div className="mt-4">

@@ -1,6 +1,7 @@
 import React from "react";
 import { BrowserRouter as Router, Routes, Route, Navigate } from "react-router-dom";
 import SharedLayout from "./components/SharedLayout";
+import EULA from "./pages/EULA";
 import SessionLayout from "./components/SessionLayout";
 import ProtectedRoute from "./components/ProtectedRoute";
 import ErrorBoundary from "./components/ErrorBoundary";
@@ -18,12 +19,31 @@ import Terms from "./pages/Terms";
 import CaseStudies from "./pages/CaseStudies";
 import ProjectsDebug from "./pages/ProjectsDebug";
 import { ModuleStateProvider } from "./contexts/ModuleStateContext";
-import { AuthProvider } from "./contexts/AuthContext";
+import { AuthProvider, useAuth } from "./contexts/AuthContext";
 import { SignUpProvider } from "./contexts/SignUpContext";
 import { ToastProvider } from "./components/ui/Toast";
 import { ProjectSyncProvider } from "./contexts/ProjectSyncContext";
 import { debugConfig } from "./config/environment";
 import SignUp from "./pages/SignUp";
+
+// Component to handle smart root redirect
+function RootRedirect() {
+  const { isAuthenticated, isLoading } = useAuth();
+  
+  if (isLoading) {
+    return (
+      <div className="flex-1 flex items-center justify-center min-h-screen">
+        <div className="text-center">
+          <div className="animate-spin w-8 h-8 border-2 border-primary border-t-transparent rounded-full mx-auto mb-4"></div>
+          <p className="text-muted">Loading...</p>
+        </div>
+      </div>
+    );
+  }
+  
+  // Always redirect to signup for simplicity - signup page will handle auth redirects appropriately
+  return <Navigate to="/signup" replace />;
+}
 
 export default function App() {
   // Log configuration on app startup
@@ -36,16 +56,17 @@ export default function App() {
       <SignUpProvider>
         <ToastProvider>
           <ModuleStateProvider>
-        <Router>
-        <Routes>
+  <Router>
+  <Routes>
         {/* Authentication & Home */}
-        <Route path="/" element={<Navigate to="/signup" replace />} />
+        <Route path="/" element={<RootRedirect />} />
         <Route path="/signup" element={<SignUp />} />
-        <Route path="/signin" element={<SignIn />} />
-        <Route path="/home" element={<Home />} />
-        <Route path="/home/projects" element={<Home />} />
-        <Route path="/home/projects/:projectId" element={<Home />} />
-        <Route path="/home/quick-tools" element={<Home />} />
+  <Route path="/signin" element={<SignIn />} />
+  <Route path="/eula" element={<EULA />} />
+        <Route path="/home" element={<ProtectedRoute><Home /></ProtectedRoute>} />
+        <Route path="/home/projects" element={<ProtectedRoute><Home /></ProtectedRoute>} />
+        <Route path="/home/projects/:projectId" element={<ProtectedRoute><Home /></ProtectedRoute>} />
+        <Route path="/home/quick-tools" element={<ProtectedRoute><Home /></ProtectedRoute>} />
         
         {/* Debug Routes (Development Only) */}
         <Route path="/debug/projects" element={<ProtectedRoute><ProjectsDebug /></ProtectedRoute>} />

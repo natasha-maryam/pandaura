@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
+import { authStorage } from '../utils/authStorage';
 
 interface ProtectedRouteProps {
   children: React.ReactNode;
@@ -13,7 +14,7 @@ export default function ProtectedRoute({ children, redirectTo = '/signin' }: Pro
   const [hasInitialized, setHasInitialized] = React.useState(false);
 
   useEffect(() => {
-    console.log('🛡️ ProtectedRoute: Auth check', {
+    console.log('🛡️ ProtectedRoute: Auth check started', {
       isLoading,
       isAuthenticated,
       hasToken: !!token,
@@ -21,30 +22,67 @@ export default function ProtectedRoute({ children, redirectTo = '/signin' }: Pro
       userEmail: user?.email,
       redirectTo,
       currentPath: window.location.pathname,
-      localStorage_token: !!localStorage.getItem('authToken'),
-      localStorage_user: !!localStorage.getItem('authUser'),
-      hasInitialized
+      cookies_token: !!authStorage.getToken(),
+      cookies_user: !!authStorage.getUser(),
+      hasInitialized,
+      timestamp: new Date().toISOString()
+    });
+
+    // Check cookies directly for debugging
+    const cookieToken = authStorage.getToken();
+    const cookieUser = authStorage.getUser();
+    console.log('🛡️ ProtectedRoute: Direct cookie check:', {
+      cookieToken: cookieToken ? `${cookieToken.substring(0, 10)}...` : null,
+      cookieUser: cookieUser ? cookieUser.email : null,
+      cookieHasAuthData: authStorage.hasAuthData()
     });
     
-    // Only set initialized to true when loading is complete AND we have auth data or no auth data
+    // Only set initialized to true when loading is complete
     if (!isLoading && !hasInitialized) {
-      console.log('🛡️ ProtectedRoute: Authentication initialization complete');
+      console.log('🛡️ ProtectedRoute: Setting initialization complete');
       setHasInitialized(true);
     }
     
-    // Add a small delay to ensure auth context has time to restore from localStorage
+    // Handle redirect logic only after initialization is complete
     if (!isLoading && hasInitialized && !isAuthenticated) {
+      console.log('🛡️ ProtectedRoute: Not authenticated after initialization, starting redirect timer');
+      
+      // Add a small delay to ensure auth context has time to restore from cookies
       const timeoutId = setTimeout(() => {
-        // Double-check authentication after a brief delay
-        if (!isAuthenticated) {
-          console.log('🚨 ProtectedRoute: Redirecting to signin - not authenticated after delay', {
+        // Check cookies one more time before redirecting
+        const hasStoredAuth = authStorage.hasAuthData();
+        const finalCookieCheck = {
+          token: authStorage.getToken(),
+          user: authStorage.getUser(),
+          hasAuthData: hasStoredAuth
+        };
+        
+        console.log('🛡️ ProtectedRoute: Final check before redirect:', {
+          isAuthenticated,
+          hasStoredAuth,
+          finalCookieCheck,
+          contextState: { hasToken: !!token, hasUser: !!user }
+        });
+        
+        if (!isAuthenticated && !hasStoredAuth) {
+          console.log('🚨 ProtectedRoute: Redirecting to signin - final auth check failed', {
             reason: !token ? 'No token' : !user ? 'No user' : 'Unknown',
-            hasLocalToken: !!localStorage.getItem('authToken'),
-            hasLocalUser: !!localStorage.getItem('authUser')
+            hasCookieToken: !!authStorage.getToken(),
+            hasCookieUser: !!authStorage.getUser(),
+            redirectingTo: redirectTo
           });
           navigate(redirectTo, { replace: true });
+        } else if (!isAuthenticated && hasStoredAuth) {
+          console.log('🤔 ProtectedRoute: Cookies have auth data but context does not - potential race condition');
+          // Give it a bit more time for the context to catch up
+          setTimeout(() => {
+            if (!isAuthenticated) {
+              console.log('🚨 ProtectedRoute: Context still not updated, forcing redirect');
+              navigate(redirectTo, { replace: true });
+            }
+          }, 500);
         }
-      }, 100); // 100ms delay
+      }, 300); // Increased delay to 300ms for better reliability
       
       return () => clearTimeout(timeoutId);
     }

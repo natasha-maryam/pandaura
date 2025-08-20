@@ -1,12 +1,14 @@
 import React, { useState, useEffect, useRef } from "react";
-import { Plug, User } from "lucide-react";
+import { Plug, User, LogOut } from "lucide-react";
 import { useNavigate, useLocation } from "react-router-dom";
+import { useAuth } from "../contexts/AuthContext";
 
 export default function NavbarIcons() {
   const [activeDropdown, setActiveDropdown] = useState<"integrations" | "profile" | null>(null);
   const navigate = useNavigate();
   const location = useLocation();
   const containerRef = useRef<HTMLDivElement>(null);
+  const { logout } = useAuth();
 
   const toggleDropdown = (type: typeof activeDropdown) => {
     setActiveDropdown(prev => (prev === type ? null : type));
@@ -37,9 +39,11 @@ export default function NavbarIcons() {
         </button>
         {activeDropdown === "integrations" && (
           <div className="absolute right-0 mt-2 w-72 bg-white rounded shadow-lg p-4 text-sm z-50">
-            <div className="font-semibold mb-3 text-primary">Productivity Tools</div>
+            <div className="font-semibold mb-3 text-primary">
+              Productivity Tools
+            </div>
             <ul className="space-y-3">
-              <li 
+              <li
                 onClick={() => {
                   console.log("Connecting to Google Drive API...");
                   alert("Google Drive integration would be configured here");
@@ -52,7 +56,7 @@ export default function NavbarIcons() {
                 </div>
                 <span>Google Drive API</span>
               </li>
-              <li 
+              <li
                 onClick={() => {
                   console.log("Connecting to Google Docs API...");
                   alert("Google Docs integration would be configured here");
@@ -65,7 +69,7 @@ export default function NavbarIcons() {
                 </div>
                 <span>Google Docs API</span>
               </li>
-              <li 
+              <li
                 onClick={() => {
                   console.log("Connecting to Dropbox API...");
                   alert("Dropbox integration would be configured here");
@@ -78,7 +82,7 @@ export default function NavbarIcons() {
                 </div>
                 <span>Dropbox API</span>
               </li>
-              <li 
+              <li
                 onClick={() => {
                   console.log("Connecting to Excel API...");
                   alert("Excel API integration would be configured here");
@@ -96,8 +100,6 @@ export default function NavbarIcons() {
         )}
       </div>
 
-
-
       {/* Profile Icon */}
       <div className="relative">
         <button
@@ -110,10 +112,10 @@ export default function NavbarIcons() {
         {activeDropdown === "profile" && (
           <div className="absolute right-0 mt-2 w-48 bg-white rounded shadow-lg py-2 text-sm z-50">
             <ul className="text-gray-800">
-              <li 
+              <li
                 onClick={() => {
                   console.log("Navigating to profile...");
-                  navigate('/profile', { state: { from: location.pathname } });
+                  navigate("/profile", { state: { from: location.pathname } });
                   setActiveDropdown(null);
                 }}
                 className="px-4 py-2 hover:bg-gray-100 cursor-pointer"
@@ -121,35 +123,46 @@ export default function NavbarIcons() {
                 👤 Profile
               </li>
 
-              <li 
+              <li
                 onClick={() => {
                   console.log("Navigating to feedback...");
-                  navigate('/feedback');
+                  navigate("/feedback");
                   setActiveDropdown(null);
                 }}
                 className="px-4 py-2 hover:bg-gray-100 cursor-pointer"
               >
                 💬 Feedback
               </li>
-              <li 
+              <li
                 onClick={() => {
                   console.log("Navigating to privacy...");
-                  navigate('/privacy');
+                  navigate("/privacy");
                   setActiveDropdown(null);
                 }}
                 className="px-4 py-2 hover:bg-gray-100 cursor-pointer"
               >
                 🔐 Privacy
               </li>
-              <li 
+              <li
                 onClick={() => {
                   console.log("Navigating to case study library...");
-                  navigate('/case-study-library');
+                  navigate("/case-study-library");
                   setActiveDropdown(null);
                 }}
                 className="px-4 py-2 hover:bg-gray-100 cursor-pointer"
               >
                 📂 Case Studies
+              </li>
+              <li
+                onClick={() => {
+                  logout();
+                  navigate("/signin");
+                  setActiveDropdown(null);
+                }}
+                className="px-4 py-2 hover:bg-gray-100 cursor-pointer flex items-center gap-2"
+              >
+                <LogOut className="w-4 h-4" />
+                Log Out
               </li>
             </ul>
           </div>
