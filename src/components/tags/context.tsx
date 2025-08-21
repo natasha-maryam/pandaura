@@ -16,8 +16,8 @@ interface TagsContextType {
   // Actions
   fetchTags: (newFilters?: TagFilters) => Promise<void>;
   createTag: (tagData: CreateTagData) => Promise<Tag>;
-  updateTag: (tagId: string, updateData: UpdateTagData) => Promise<Tag>;
-  deleteTag: (tagId: string) => Promise<void>;
+  updateTag: (tagId: number | string, updateData: UpdateTagData) => Promise<Tag>;
+  deleteTag: (tagId: number | string) => Promise<void>;
   setFilters: (filters: TagFilters) => void;
   clearError: () => void;
   refreshTags: () => Promise<void>;
@@ -92,7 +92,7 @@ export const TagsProvider: React.FC<TagsProviderProps> = ({ children }) => {
     }
   }, []);
 
-  const updateTag = useCallback(async (tagId: string, updateData: UpdateTagData): Promise<Tag> => {
+  const updateTag = useCallback(async (tagId: number | string, updateData: UpdateTagData): Promise<Tag> => {
     setError(null);
     
     try {
@@ -112,7 +112,7 @@ export const TagsProvider: React.FC<TagsProviderProps> = ({ children }) => {
     }
   }, []);
 
-  const deleteTag = useCallback(async (tagId: string): Promise<void> => {
+  const deleteTag = useCallback(async (tagId: number | string): Promise<void> => {
     setError(null);
     
     try {

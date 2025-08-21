@@ -9,7 +9,7 @@ const API_BASE_URL = `${config.apiBaseUrl}/api/v1`;
 console.log('🔗 TagsAPI initialized with base URL:', API_BASE_URL);
 
 export interface Tag {
-  id: string;
+  id: number; // Changed from string to number to match backend
   project_id: number;
   user_id: string;
   name: string;
@@ -132,7 +132,21 @@ export class TagsAPI {
       throw new Error(error.error || 'Failed to fetch tags');
     }
 
-    return response.json();
+    const tags = await response.json();
+    
+    // Transform backend response (direct array) to frontend expected format
+    return {
+      success: true,
+      data: {
+        tags: Array.isArray(tags) ? tags : [],
+        pagination: {
+          page: 1,
+          pageSize: Array.isArray(tags) ? tags.length : 0,
+          total: Array.isArray(tags) ? tags.length : 0,
+          totalPages: 1
+        }
+      }
+    };
   }
 
   // Create a new tag
@@ -145,14 +159,27 @@ export class TagsAPI {
 
     if (!response.ok) {
       const error = await response.json().catch(() => ({ error: 'Network error' }));
-      throw new Error(error.error || 'Failed to create tag');
+      
+      // If backend sends validation details, include them in the error message
+      let errorMessage = error.error || 'Failed to create tag';
+      if (error.details && Array.isArray(error.details) && error.details.length > 0) {
+        errorMessage += ': ' + error.details.join(', ');
+      }
+      
+      throw new Error(errorMessage);
     }
 
-    return response.json();
+    const result = await response.json();
+    
+    // Transform backend response { message, tag } to frontend expected format
+    return {
+      success: true,
+      data: result.tag
+    };
   }
 
   // Get tag by ID
-  static async getTag(tagId: string): Promise<TagResponse> {
+  static async getTag(tagId: number | string): Promise<TagResponse> {
     const response = await fetch(`${API_BASE_URL}/tags/${tagId}`, {
       headers: getAuthHeaders(),
     });
@@ -166,7 +193,7 @@ export class TagsAPI {
   }
 
   // Update tag
-  static async updateTag(tagId: string, updateData: UpdateTagData): Promise<TagResponse> {
+  static async updateTag(tagId: number | string, updateData: UpdateTagData): Promise<TagResponse> {
     const response = await fetch(`${API_BASE_URL}/tags/${tagId}`, {
       method: 'PUT',
       headers: getAuthHeaders(),
@@ -175,14 +202,27 @@ export class TagsAPI {
 
     if (!response.ok) {
       const error = await response.json().catch(() => ({ error: 'Network error' }));
-      throw new Error(error.error || 'Failed to update tag');
+      
+      // If backend sends validation details, include them in the error message
+      let errorMessage = error.error || 'Failed to update tag';
+      if (error.details && Array.isArray(error.details) && error.details.length > 0) {
+        errorMessage += ': ' + error.details.join(', ');
+      }
+      
+      throw new Error(errorMessage);
     }
 
-    return response.json();
+    const result = await response.json();
+    
+    // Transform backend response { message, tag } to frontend expected format
+    return {
+      success: true,
+      data: result.tag
+    };
   }
 
   // Delete tag
-  static async deleteTag(tagId: string): Promise<{ success: boolean; message: string }> {
+  static async deleteTag(tagId: number | string): Promise<{ success: boolean; message: string }> {
     const response = await fetch(`${API_BASE_URL}/tags/${tagId}`, {
       method: 'DELETE',
       headers: getAuthHeaders(),
