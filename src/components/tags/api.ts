@@ -1,6 +1,7 @@
 // API client for tags endpoints
 import { config, debugConfig } from '../../config/environment';
 import { authStorage } from '../../utils/authStorage';
+import { getFilenameFromResponse, DownloadResult } from '../../utils/downloadUtils';
 
 // Debug the API configuration on load
 debugConfig();
@@ -327,7 +328,7 @@ export class TagsAPI {
   }
 
   // Beckhoff-specific export functions
-  static async exportBeckhoffCsv(projectId: number): Promise<Blob> {
+  static async exportBeckhoffCsv(projectId: number): Promise<DownloadResult> {
     const response = await fetch(`${API_BASE_URL}/tags/projects/${projectId}/export/beckhoff/csv`, {
       method: 'GET',
       headers: getAuthHeaders(),
@@ -338,10 +339,12 @@ export class TagsAPI {
       throw new Error(error.error || 'Failed to export Beckhoff CSV');
     }
 
-    return response.blob();
+    const blob = await response.blob();
+    const filename = getFilenameFromResponse(response);
+    return { blob, filename };
   }
 
-  static async exportBeckhoffXml(projectId: number): Promise<Blob> {
+  static async exportBeckhoffXml(projectId: number): Promise<DownloadResult> {
     const response = await fetch(`${API_BASE_URL}/tags/projects/${projectId}/export/beckhoff/xml`, {
       method: 'GET',
       headers: getAuthHeaders(),
@@ -352,11 +355,13 @@ export class TagsAPI {
       throw new Error(error.error || 'Failed to export Beckhoff XML');
     }
 
-    return response.blob();
+    const blob = await response.blob();
+    const filename = getFilenameFromResponse(response);
+    return { blob, filename };
   }
 
   // Rockwell-specific export functions
-  static async exportRockwellCsv(projectId: number): Promise<Blob> {
+  static async exportRockwellCsv(projectId: number): Promise<DownloadResult> {
     const response = await fetch(`${API_BASE_URL}/tags/projects/${projectId}/export/rockwell/csv`, {
       method: 'GET',
       headers: getAuthHeaders(),
@@ -367,10 +372,12 @@ export class TagsAPI {
       throw new Error(error.error || 'Failed to export Rockwell CSV');
     }
 
-    return response.blob();
+    const blob = await response.blob();
+    const filename = getFilenameFromResponse(response);
+    return { blob, filename };
   }
 
-  static async exportRockwellL5X(projectId: number): Promise<Blob> {
+  static async exportRockwellL5X(projectId: number): Promise<DownloadResult> {
     const response = await fetch(`${API_BASE_URL}/tags/projects/${projectId}/export/rockwell/l5x`, {
       method: 'GET',
       headers: getAuthHeaders(),
@@ -381,11 +388,13 @@ export class TagsAPI {
       throw new Error(error.error || 'Failed to export Rockwell L5X');
     }
 
-    return response.blob();
+    const blob = await response.blob();
+    const filename = getFilenameFromResponse(response);
+    return { blob, filename };
   }
 
   // Siemens-specific export functions
-  static async exportSiemensCsv(projectId: number): Promise<Blob> {
+  static async exportSiemensCsv(projectId: number): Promise<DownloadResult> {
     const response = await fetch(`${API_BASE_URL}/tags/projects/${projectId}/export/siemens/csv`, {
       method: 'GET',
       headers: getAuthHeaders(),
@@ -396,10 +405,12 @@ export class TagsAPI {
       throw new Error(error.error || 'Failed to export Siemens CSV');
     }
 
-    return response.blob();
+    const blob = await response.blob();
+    const filename = getFilenameFromResponse(response);
+    return { blob, filename };
   }
 
-  static async exportSiemensXml(projectId: number): Promise<Blob> {
+  static async exportSiemensXml(projectId: number): Promise<DownloadResult> {
     const response = await fetch(`${API_BASE_URL}/tags/projects/${projectId}/export/siemens/xml`, {
       method: 'GET',
       headers: getAuthHeaders(),
@@ -410,7 +421,58 @@ export class TagsAPI {
       throw new Error(error.error || 'Failed to export Siemens XML');
     }
 
-    return response.blob();
+    const blob = await response.blob();
+    const filename = getFilenameFromResponse(response);
+    return { blob, filename };
+  }
+
+  // XLSX Export Functions
+  static async exportBeckhoffXlsx(projectId: number): Promise<DownloadResult> {
+    const response = await fetch(`${API_BASE_URL}/tags/projects/${projectId}/export/beckhoff/xlsx`, {
+      method: 'GET',
+      headers: getAuthHeaders(),
+    });
+
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({ error: 'Network error' }));
+      throw new Error(error.error || 'Failed to export Beckhoff XLSX');
+    }
+
+    const blob = await response.blob();
+    const filename = getFilenameFromResponse(response);
+    return { blob, filename };
+  }
+
+  static async exportSiemensXlsx(projectId: number): Promise<DownloadResult> {
+    const response = await fetch(`${API_BASE_URL}/tags/projects/${projectId}/export/siemens/xlsx`, {
+      method: 'GET',
+      headers: getAuthHeaders(),
+    });
+
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({ error: 'Network error' }));
+      throw new Error(error.error || 'Failed to export Siemens XLSX');
+    }
+
+    const blob = await response.blob();
+    const filename = getFilenameFromResponse(response);
+    return { blob, filename };
+  }
+
+  static async exportRockwellXlsx(projectId: number): Promise<DownloadResult> {
+    const response = await fetch(`${API_BASE_URL}/tags/projects/${projectId}/export/rockwell/xlsx`, {
+      method: 'GET',
+      headers: getAuthHeaders(),
+    });
+
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({ error: 'Network error' }));
+      throw new Error(error.error || 'Failed to export Rockwell XLSX');
+    }
+
+    const blob = await response.blob();
+    const filename = getFilenameFromResponse(response);
+    return { blob, filename };
   }
 
   static async importBeckhoffCsv(projectId: number, file: File): Promise<{

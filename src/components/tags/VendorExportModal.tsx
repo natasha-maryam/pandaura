@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Download, AlertCircle, CheckCircle, Loader2, FileDown, X } from 'lucide-react';
 import { Modal } from '../ui';
 import { TagsAPI, Tag } from './api';
+import { downloadBlob, DownloadResult } from '../../utils/downloadUtils';
 
 interface VendorExportModalProps {
   isOpen: boolean;
@@ -28,12 +29,12 @@ const exportOptions: ExportOption[] = [
   },
   {
     vendor: 'siemens',
-    formats: ['csv', 'xlsx', 'xml'],
+    formats: ['csv','xlsx', 'xml'],
     displayName: 'Siemens (TIA Portal)'
   },
   {
     vendor: 'beckhoff',
-    formats: ['csv', 'xlsx', 'xml'],
+    formats: ['csv','xlsx', 'xml'],
     displayName: 'Beckhoff (TwinCAT)'
   }
 ];
@@ -110,48 +111,57 @@ export default function VendorExportModal({
       }
 
       // Call the appropriate vendor-specific export API
-      let blob: Blob;
+      let result: DownloadResult;
       if (state.selectedVendor === 'beckhoff') {
         if (state.selectedFormat === 'csv') {
-          blob = await TagsAPI.exportBeckhoffCsv(projectId);
+          result = await TagsAPI.exportBeckhoffCsv(projectId);
         } else if (state.selectedFormat === 'xml') {
-          blob = await TagsAPI.exportBeckhoffXml(projectId);
+          result = await TagsAPI.exportBeckhoffXml(projectId);
+        } else if (state.selectedFormat === 'xlsx') {
+          result = await TagsAPI.exportBeckhoffXlsx(projectId);
         } else {
-          // For xlsx, default to CSV for now
-          blob = await TagsAPI.exportBeckhoffCsv(projectId);
+          // Fallback to CSV for unknown formats
+          result = await TagsAPI.exportBeckhoffCsv(projectId);
         }
       } else if (state.selectedVendor === 'siemens') {
         if (state.selectedFormat === 'csv') {
-          blob = await TagsAPI.exportSiemensCsv(projectId);
+          result = await TagsAPI.exportSiemensCsv(projectId);
         } else if (state.selectedFormat === 'xml') {
-          blob = await TagsAPI.exportSiemensXml(projectId);
+          result = await TagsAPI.exportSiemensXml(projectId);
+        } else if (state.selectedFormat === 'xlsx') {
+          result = await TagsAPI.exportSiemensXlsx(projectId);
         } else {
-          // For xlsx, default to CSV for now
-          blob = await TagsAPI.exportSiemensCsv(projectId);
+          // Fallback to CSV for unknown formats
+          result = await TagsAPI.exportSiemensCsv(projectId);
         }
       } else if (state.selectedVendor === 'rockwell') {
         if (state.selectedFormat === 'csv') {
-          blob = await TagsAPI.exportRockwellCsv(projectId);
+          result = await TagsAPI.exportRockwellCsv(projectId);
         } else if (state.selectedFormat === 'l5x') {
-          blob = await TagsAPI.exportRockwellL5X(projectId);
+          result = await TagsAPI.exportRockwellL5X(projectId);
+        } else if (state.selectedFormat === 'xlsx') {
+          result = await TagsAPI.exportRockwellXlsx(projectId);
         } else {
-          // For xlsx, default to CSV for now
-          blob = await TagsAPI.exportRockwellCsv(projectId);
+          // Fallback to CSV for unknown formats
+          result = await TagsAPI.exportRockwellCsv(projectId);
         }
       } else {
-        // For other vendors, use the generic export function
-        blob = await TagsAPI.exportVendorTags(projectId, state.selectedVendor, state.selectedFormat);
+        // For other vendors, use the generic export function (fallback to creating filename)
+        const blob = await TagsAPI.exportVendorTags(projectId, state.selectedVendor, state.selectedFormat);
+        result = { 
+          blob, 
+          filename: `${projectName}-${state.selectedVendor}-tags.${state.selectedFormat}`
+        };
       }
 
-      // Create download
-      const url = window.URL.createObjectURL(blob);
-      const filename = `${projectName}-${state.selectedVendor}-tags.${state.selectedFormat}`;
+      // Create download URL from the result
+      const url = window.URL.createObjectURL(result.blob);
       
       setState(prev => ({ 
         ...prev, 
         step: 'success', 
         downloadUrl: url, 
-        filename 
+        filename: result.filename 
       }));
 
     } catch (error) {
@@ -176,15 +186,25 @@ export default function VendorExportModal({
     }
   };
 
-  const handleDownload = () => {
+  const handleDownload = async () => {
     if (state.downloadUrl && state.filename) {
-      const a = document.createElement('a');
-      a.href = state.downloadUrl;
-      a.download = state.filename;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      window.URL.revokeObjectURL(state.downloadUrl);
+      try {
+        // Create a new blob from the existing blob URL
+        const response = await fetch(state.downloadUrl);
+        const blob = await response.blob();
+        downloadBlob(blob, state.filename);
+        window.URL.revokeObjectURL(state.downloadUrl);
+      } catch (error) {
+        console.error('Download failed:', error);
+        // Fallback to the original download method
+        const a = document.createElement('a');
+        a.href = state.downloadUrl;
+        a.download = state.filename;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        window.URL.revokeObjectURL(state.downloadUrl);
+      }
     }
   };
 
