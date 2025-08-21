@@ -1,5 +1,6 @@
 // API client for tags endpoints
 import { config, debugConfig } from '../../config/environment';
+import { authStorage } from '../../utils/authStorage';
 
 // Debug the API configuration on load
 debugConfig();
@@ -101,7 +102,7 @@ export interface TagStatsResponse {
 }
 
 function getAuthHeaders(): HeadersInit {
-  const token = localStorage.getItem('authToken');
+  const token = authStorage.getToken();
   return {
     'Content-Type': 'application/json',
     'Authorization': token ? `Bearer ${token}` : '',
@@ -384,7 +385,7 @@ export class TagsAPI {
     const response = await fetch(`${API_BASE_URL}/tags/projects/${projectId}/import/beckhoff/csv`, {
       method: 'POST',
       headers: {
-        'Authorization': `Bearer ${localStorage.getItem('authToken')}`,
+        'Authorization': `Bearer ${authStorage.getToken()}`,
       },
       body: formData,
     });
@@ -406,7 +407,7 @@ export class TagsAPI {
     const response = await fetch(`${API_BASE_URL}/tags/projects/${projectId}/import/beckhoff/xml`, {
       method: 'POST',
       headers: {
-        'Authorization': `Bearer ${localStorage.getItem('authToken')}`,
+        'Authorization': `Bearer ${authStorage.getToken()}`,
       },
       body: formData,
     });
@@ -428,7 +429,7 @@ export class TagsAPI {
     const response = await fetch(`${API_BASE_URL}/tags/projects/${projectId}/import/rockwell/csv`, {
       method: 'POST',
       headers: {
-        'Authorization': `Bearer ${localStorage.getItem('authToken')}`,
+        'Authorization': `Bearer ${authStorage.getToken()}`,
       },
       body: formData,
     });
@@ -449,7 +450,7 @@ export class TagsAPI {
     const response = await fetch(`${API_BASE_URL}/tags/projects/${projectId}/import/rockwell/l5x`, {
       method: 'POST',
       headers: {
-        'Authorization': `Bearer ${localStorage.getItem('authToken')}`,
+        'Authorization': `Bearer ${authStorage.getToken()}`,
       },
       body: formData,
     });
@@ -471,7 +472,7 @@ export class TagsAPI {
     const response = await fetch(`${API_BASE_URL}/tags/projects/${projectId}/import/siemens/csv`, {
       method: 'POST',
       headers: {
-        'Authorization': `Bearer ${localStorage.getItem('authToken')}`,
+        'Authorization': `Bearer ${authStorage.getToken()}`,
       },
       body: formData,
     });
@@ -493,7 +494,7 @@ export class TagsAPI {
     const response = await fetch(`${API_BASE_URL}/tags/projects/${projectId}/import/siemens/xml`, {
       method: 'POST',
       headers: {
-        'Authorization': `Bearer ${localStorage.getItem('authToken')}`,
+        'Authorization': `Bearer ${authStorage.getToken()}`,
       },
       body: formData,
     });

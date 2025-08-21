@@ -50,15 +50,7 @@ export default function ProjectsList({
 
     try {
       setIsLoading(true);
-      setError('');
-      
-      console.log('ProjectsList: Loading projects for authenticated user:', user?.email);
-      console.log('ProjectsList loadProjects - Token debug:', {
-        localStorage: localStorage.getItem('authToken') ? 'exists' : 'missing',
-        sessionStorage: sessionStorage.getItem('authToken') ? 'exists' : 'missing',
-        localStorageKeys: Object.keys(localStorage),
-        authTokenPreview: localStorage.getItem('authToken')?.substring(0, 10) + '...' || 'none'
-      });
+      setError('')
       
       const apiProjects = await ProjectsAPI.getProjects();
       const displayProjects = apiProjects.map(convertApiToDisplay);
@@ -93,9 +85,9 @@ export default function ProjectsList({
 
   // Filter projects based on search and status
   const filteredProjects = projects.filter(project => {
-    const matchesSearch = project.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         project.client.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         project.description.toLowerCase().includes(searchTerm.toLowerCase());
+    const matchesSearch = (project.name || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+                         (project.client || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+                         (project.description || '').toLowerCase().includes(searchTerm.toLowerCase());
     const matchesFilter = filterStatus === 'all' || project.status === filterStatus;
     return matchesSearch && matchesFilter;
   });

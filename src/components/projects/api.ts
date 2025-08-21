@@ -1,5 +1,6 @@
 import axios from 'axios';
 import { config } from '../../config/environment';
+import { authStorage } from '../../utils/authStorage';
 
 // API Types matching the backend
 export interface Project {
@@ -67,8 +68,8 @@ const api = axios.create({
 
 // Helper function to get the current auth token
 const getAuthToken = (): string | null => {
-  // AuthContext stores token in localStorage
-  const token = localStorage.getItem('authToken');
+  // Use authStorage to get token from cookies
+  const token = authStorage.getToken();
   
   if (!token) {
     console.warn('ProjectsAPI: No authentication token found. User may not be logged in.');

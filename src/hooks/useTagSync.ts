@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
+import { authStorage } from '../utils/authStorage';
 
 export interface TagSyncMessage {
   type: 'sync_tags' | 'subscribe' | 'unsubscribe' | 'ping';
@@ -69,9 +70,9 @@ export function useTagSync(options: UseTagSyncOptions = {}): UseTagSyncReturn {
   const reconnectTimeoutRef = useRef<number | null>(null);
   const subscribedProjectRef = useRef<string | null>(null);
 
-  // Get auth token from localStorage
+  // Get auth token from authStorage
   const getAuthToken = useCallback(() => {
-    return localStorage.getItem('authToken');
+    return authStorage.getToken();
   }, []);
 
   // Get WebSocket URL

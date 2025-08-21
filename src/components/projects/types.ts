@@ -44,14 +44,14 @@ export interface Project {
 }
 
 // Type converters between API and Display types
-export const convertApiToDisplay = (apiProject: ApiProject): Project => {
+export const convertApiToDisplay = (apiProject: any): Project => {
   return {
     id: apiProject.id,
-    name: apiProject.project_name,
-    client: apiProject.client_name || 'N/A',
-    vendor: apiProject.target_plc_vendor || 'N/A',
-    type: apiProject.project_type || '',
-    lastModified: apiProject.updated_at,
+    name: apiProject.projectName || apiProject.project_name || '',
+    client: apiProject.clientName || apiProject.client_name || 'N/A',
+    vendor: apiProject.targetPLCVendor || apiProject.target_plc_vendor || 'N/A',
+    type: apiProject.projectType || apiProject.project_type || '',
+    lastModified: apiProject.updatedAt || apiProject.updated_at || '',
     description: apiProject.description || '',
     status: 'active', // Default status
     versions: [], // Will be populated separately if needed
