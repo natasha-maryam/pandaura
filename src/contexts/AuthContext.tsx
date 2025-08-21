@@ -1,6 +1,6 @@
 import React, { createContext, useState, useEffect, useContext, ReactNode } from 'react';
 import axios from 'axios';
-import { authStorage } from '../utils/authStorage';
+import { authStorage, SESSION_EXPIRY_HOURS } from '../utils/authStorage';
 
 export interface OrgInfo {
   org_id: string;
@@ -50,8 +50,9 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const [selectedOrgState, setSelectedOrgState] = useState<OrgInfo | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isInitialized, setIsInitialized] = useState(false);
+  const [sessionExpired, setSessionExpired] = useState(false);
 
-  const isAuthenticated = !!token && !!user;
+  const isAuthenticated = !!token && !!user && !sessionExpired;
 
   // Custom setSelectedOrg that also persists to cookies
   const setSelectedOrg = (org: OrgInfo | null) => {
@@ -122,48 +123,23 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     });
 
     if (storedToken && storedUser) {
-      try {
-        console.log('🔍 AuthContext: Attempting to restore authentication state...');
-        
-        // Only set state if component is still mounted
-        if (isMounted) {
-          console.log('🔍 AuthContext: Setting user state...');
-          setUser(storedUser);
-          
-          console.log('🔍 AuthContext: Setting token state...');
-          setToken(storedToken);
-          
-          if (storedOrgs && storedOrgs.length > 0) {
-            console.log('🔍 AuthContext: Setting organizations state...');
-            setOrganizations(storedOrgs);
+      if (authStorage.isSessionExpired()) {
+        setSessionExpired(true);
+        logout();
+      } else {
+        try {
+          if (isMounted) {
+            setUser(storedUser);
+            setToken(storedToken);
+            if (storedOrgs && storedOrgs.length > 0) setOrganizations(storedOrgs);
+            if (storedSelectedOrg) setSelectedOrgState(storedSelectedOrg);
           }
-          
-          if (storedSelectedOrg) {
-            console.log('🔍 AuthContext: Setting selected org state...');
-            setSelectedOrgState(storedSelectedOrg);
+        } catch (error) {
+          if (isMounted) {
+            authStorage.clearAll();
           }
-          
-          console.log('🔍 AuthContext: State restoration complete');
-        }
-        
-        console.log('🔍 AuthContext: Authentication state restored successfully', {
-          userEmail: storedUser.email,
-          userId: storedUser.userId,
-          isAuthenticated: !!(storedToken && storedUser)
-        });
-      } catch (error) {
-        console.error('❌ Failed to restore auth state:', error);
-        // Clear corrupted data only if still mounted
-        if (isMounted) {
-          console.log('🧹 Clearing corrupted auth data...');
-          authStorage.clearAll();
         }
       }
-    } else {
-      console.log('🔍 AuthContext: No stored authentication data found', {
-        missingToken: !storedToken,
-        missingUser: !storedUser
-      });
     }
     
     // Set loading to false only after attempting to restore auth state and if still mounted
@@ -435,6 +411,18 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       };
     }
   };
+
+  if (sessionExpired) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-screen bg-surface">
+        <div className="bg-white border border-error/30 rounded-lg shadow-lg p-8 max-w-md text-center">
+          <h2 className="text-2xl font-bold text-error mb-4">Session Expired</h2>
+          <p className="text-muted mb-6">For security purposes, you must log in again. Your session has expired after {SESSION_EXPIRY_HOURS} hours.</p>
+          <a href="/signin" className="inline-block px-6 py-2 bg-primary text-white rounded hover:bg-secondary transition-colors font-semibold">Go to Login</a>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <AuthContext.Provider

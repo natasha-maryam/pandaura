@@ -1,4 +1,4 @@
-import React from "react";
+
 import pandauraLogo from "../assets/logo.png"; 
 
 export default function SplashScreen() {

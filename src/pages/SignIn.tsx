@@ -27,13 +27,6 @@ export default function SignInPage() {
   const navigate = useNavigate();
   const { login, setSelectedOrg, organizations: contextOrganizations, isAuthenticated, isLoading: authLoading } = useAuth();
 
-  // Only redirect if already authenticated (this shouldn't interfere with signup flow)
-  useEffect(() => {
-    if (!authLoading && isAuthenticated) {
-      navigate('/home', { replace: true });
-    }
-  }, [isAuthenticated, authLoading, navigate]);
-
   // Form state
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -46,10 +39,39 @@ export default function SignInPage() {
   const [error, setError] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [showSplash, setShowSplash] = useState(false);
+
+  // Only redirect if already authenticated and not showing splash
+  // This prevents interference with the splash screen during login flow
+  useEffect(() => {
+    if (!authLoading && isAuthenticated && !showSplash) {
+      navigate('/home', { replace: true });
+    }
+  }, [isAuthenticated, authLoading, showSplash, navigate]);
   
   // UI state
   const [currentTooltip, setCurrentTooltip] = useState("");
   const [usedTooltips, setUsedTooltips] = useState<string[]>([]);
+
+  // Handle splash screen timeout with proper cleanup
+  useEffect(() => {
+    let timeoutId: number;
+    
+    if (showSplash) {
+      console.log('🎉 Splash screen shown - starting 3 second timer');
+      timeoutId = window.setTimeout(() => {
+        console.log('🎉 Splash timeout completed - navigating to home');
+        setShowSplash(false);
+        navigate("/home");
+      }, 3000);
+    }
+
+    return () => {
+      if (timeoutId) {
+        console.log('🧹 Cleaning up splash timeout');
+        window.clearTimeout(timeoutId);
+      }
+    };
+  }, [showSplash, navigate]);
 
   // Set a random tooltip on component mount
   useEffect(() => {
@@ -78,19 +100,8 @@ export default function SignInPage() {
         // User has 2FA enabled, show authenticator screen
         setCurrentStep('twoFactor');
       } else if (result.success) {
-        // Login successful, check if user has multiple orgs
-        // Wait a moment for the AuthContext to update, then check organizations
-        setTimeout(() => {
-          if (contextOrganizations && contextOrganizations.length > 1) {
-            // User has multiple organizations, show selector
-            setOrganizations(contextOrganizations);
-            setCurrentStep('orgSelection');
-          } else {
-            // Single or no organization, proceed to home
-            setCurrentStep('complete');
-            handleSuccessfulLogin();
-          }
-        }, 100);
+        // Login successful, show splash screen immediately
+        handleSuccessfulLogin();
       } else {
         setError(result.message || 'Invalid credentials');
       }
@@ -110,21 +121,15 @@ export default function SignInPage() {
       const result = await login(email.trim(), password, code);
       
       if (result.success) {
+        console.log('🔐 2FA verification successful');
         // Store remember device preference (for future implementation)
         if (rememberDevice) {
           localStorage.setItem('pandaura_trusted_device', 'true');
         }
         
-        // Check for multiple organizations after 2FA success
-        setTimeout(() => {
-          if (contextOrganizations && contextOrganizations.length > 1) {
-            setOrganizations(contextOrganizations);
-            setCurrentStep('orgSelection');
-          } else {
-            setCurrentStep('complete');
-            handleSuccessfulLogin();
-          }
-        }, 100);
+        // Simply call handleSuccessfulLogin which shows splash and navigates
+        console.log('🔐 About to call handleSuccessfulLogin');
+        handleSuccessfulLogin();
         
         return { success: true };
       } else {
@@ -134,6 +139,7 @@ export default function SignInPage() {
       console.error('2FA verification error:', err);
       return { success: false, message: err.message || 'Verification failed' };
     } finally {
+      console.log('🔐 Setting isLoading to false');
       setIsLoading(false);
     }
   };
@@ -141,14 +147,13 @@ export default function SignInPage() {
   const handleOrgSelection = (selectedOrg: OrgInfo) => {
     setSelectedOrg(selectedOrg);
     setCurrentStep('complete');
-    handleSuccessfulLogin();
+    // Navigate to home immediately after org selection
+    navigate("/home");
   };
 
   const handleSuccessfulLogin = () => {
+    console.log('🎉 handleSuccessfulLogin called - setting showSplash to true');
     setShowSplash(true);
-    setTimeout(() => {
-      navigate("/home");
-    }, 1500);
   };
 
   const handleBackToCredentials = () => {
@@ -157,10 +162,15 @@ export default function SignInPage() {
   };
 
   // Show splash screen when login is complete
-  if (showSplash) return <SplashScreen />;
+  console.log('🔍 Render check - showSplash:', showSplash, 'currentStep:', currentStep, 'isLoading:', isLoading);
+  if (showSplash) {
+    console.log('🎉 Showing splash screen');
+    return <SplashScreen />;
+  }
 
   // Show 2FA authenticator screen
   if (currentStep === 'twoFactor') {
+    console.log('🔐 Showing 2FA screen');
     return (
       <SignInAuthenticator
         email={email}

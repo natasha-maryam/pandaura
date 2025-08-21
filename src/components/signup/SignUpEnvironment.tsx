@@ -97,6 +97,7 @@ export default function SignUpEnvironment({
         headers: {
           'Content-Type': 'application/json',
         },
+        credentials: 'include',
         body: JSON.stringify({
           instanceId,
           deviceFingerprintHash: fingerprint,

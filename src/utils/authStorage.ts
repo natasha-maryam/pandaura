@@ -5,6 +5,7 @@ const AUTH_TOKEN_COOKIE = 'pandaura_auth_token';
 const AUTH_USER_COOKIE = 'pandaura_auth_user';
 const AUTH_ORGS_COOKIE = 'pandaura_auth_orgs';
 const AUTH_SELECTED_ORG_COOKIE = 'pandaura_auth_selected_org';
+const AUTH_LOGIN_TIME_COOKIE = 'pandaura_auth_login_time';
 
 // Cookie options - expires in 30 days
 const cookieOptions = {
@@ -16,11 +17,14 @@ const cookieOptions = {
 
 console.log('🍪 AuthStorage: Cookie options configured:', cookieOptions);
 
+export const SESSION_EXPIRY_HOURS = 24;
 export const authStorage = {
   // Token storage
   setToken: (token: string) => {
     console.log('🍪 AuthStorage: Setting token cookie');
     Cookies.set(AUTH_TOKEN_COOKIE, token, cookieOptions);
+    // Set login time when token is set
+    Cookies.set(AUTH_LOGIN_TIME_COOKIE, Date.now().toString(), cookieOptions);
     console.log('🍪 AuthStorage: Token cookie set, verifying...', !!Cookies.get(AUTH_TOKEN_COOKIE));
   },
   
@@ -33,6 +37,7 @@ export const authStorage = {
   removeToken: () => {
     console.log('🍪 AuthStorage: Removing token cookie');
     Cookies.remove(AUTH_TOKEN_COOKIE, { path: '/' });
+    Cookies.remove(AUTH_LOGIN_TIME_COOKIE, { path: '/' });
   },
 
   // User storage
@@ -127,6 +132,7 @@ export const authStorage = {
     Cookies.remove(AUTH_USER_COOKIE, { path: '/' });
     Cookies.remove(AUTH_ORGS_COOKIE, { path: '/' });
     Cookies.remove(AUTH_SELECTED_ORG_COOKIE, { path: '/' });
+    Cookies.remove(AUTH_LOGIN_TIME_COOKIE, { path: '/' });
     console.log('🍪 AuthStorage: All cookies cleared');
   },
 
@@ -134,8 +140,25 @@ export const authStorage = {
   hasAuthData: (): boolean => {
     const token = Cookies.get(AUTH_TOKEN_COOKIE);
     const user = Cookies.get(AUTH_USER_COOKIE);
-    const hasAuth = !!(token && user);
-    console.log('🍪 AuthStorage: Checking auth data:', { hasToken: !!token, hasUser: !!user, hasAuth });
+    const loginTime = Cookies.get(AUTH_LOGIN_TIME_COOKIE);
+    let expired = false;
+    if (loginTime) {
+      const loginTimestamp = parseInt(loginTime, 10);
+      const now = Date.now();
+      const diffHours = (now - loginTimestamp) / (1000 * 60 * 60);
+      expired = diffHours > SESSION_EXPIRY_HOURS;
+    }
+    const hasAuth = !!(token && user) && !expired;
+    console.log('🍪 AuthStorage: Checking auth data:', { hasToken: !!token, hasUser: !!user, expired, hasAuth });
     return hasAuth;
+  },
+
+  isSessionExpired: (): boolean => {
+    const loginTime = Cookies.get(AUTH_LOGIN_TIME_COOKIE);
+    if (!loginTime) return true;
+    const loginTimestamp = parseInt(loginTime, 10);
+    const now = Date.now();
+    const diffHours = (now - loginTimestamp) / (1000 * 60 * 60);
+    return diffHours > SESSION_EXPIRY_HOURS;
   }
 };
