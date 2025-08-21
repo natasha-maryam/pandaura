@@ -113,7 +113,7 @@ export default function VendorImportModal({
           result = await TagsAPI.importSiemensXml(projectId, file);
         } else if (format === 'xlsx') {
           // If xlsx import is implemented on backend in future, call it here
-          throw new Error('XLSX import for Siemens is not implemented on the server');
+          throw new Error('XLSX import for Siemens is not supported.');
         } else {
           throw new Error('Unsupported format for Siemens');
         }
@@ -468,7 +468,7 @@ export default function VendorImportModal({
                 Import completed successfully!
               </div>
               <div className="text-gray-600 mb-4">
-                {state.importResult?.inserted || 0} tags were imported into "{projectName}"
+                {state.importResult?.inserted || 0} tags were imported 
               </div>
               
               {state.importResult?.errors && state.importResult.errors.length > 0 && (

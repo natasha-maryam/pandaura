@@ -405,7 +405,7 @@ export default function VendorImportModal({
                 Import completed successfully!
               </div>
               <div className="text-gray-600 mb-4">
-                {state.importResult?.inserted || 0} tags were imported into "{projectName}"
+                {state.importResult?.inserted || 0} tags were imported 
               </div>
               
               {state.importResult?.errors && state.importResult.errors.length > 0 && (
