@@ -69,11 +69,19 @@ export default function LogicStudio({ sessionMode = false }: LogicStudioProps) {
   useEffect(() => {
     if (currentProjectId && isConnected && loadedProjectRef.current !== currentProjectId) {
       console.log(`📂 Loading existing tags for project ${currentProjectId}`);
+      console.log(`📂 Current URL:`, window.location.href);
       loadedProjectRef.current = currentProjectId;
 
       loadExistingTags().then((tags: any[]) => {
+        console.log(`📂 Raw tags loaded from API:`, tags);
+        console.log(`📂 Number of tags loaded:`, tags.length);
+        
         if (tags.length > 0) {
           console.log(`📂 Found ${tags.length} existing tags:`, tags);
+          console.log(`📂 Tag details:`);
+          tags.forEach((tag, index) => {
+            console.log(`📂   Tag ${index + 1}: name="${tag.name}", scope="${tag.scope}", data_type="${tag.data_type}", address="${tag.address}"`);
+          });
 
           // Generate ST code from existing tags and populate editor
           const generatedSTCode = tagsToSTCodeWithScopes(tags);
@@ -116,29 +124,18 @@ END_PROGRAM`;
   // Get persisted state or use defaults
   const moduleState = getModuleState('LogicStudio');
   const [prompt, setPrompt] = useState(moduleState.prompt || "");
-  const [editorCode, setEditorCode] = useState(moduleState.editorCode || `PROGRAM Main
+  
+  // Start with empty program structure for new projects
+  const emptyProgramCode = `PROGRAM Main
   VAR
-    Start_Button    : BOOL;
-    Stop_Button     : BOOL;
-    Emergency_Stop  : BOOL;
-    Motor_Contactor : BOOL;
-    Motor_Running   : BOOL;
-    Safety_OK       : BOOL;
+    // Add your variables here
   END_VAR
 
-  // Safety Circuit
-  Safety_OK := NOT Emergency_Stop;
+  // Add your logic here
 
-  // Motor Control Logic
-  IF Start_Button AND Safety_OK AND NOT Stop_Button THEN
-    Motor_Contactor := TRUE;
-  ELSIF Stop_Button OR NOT Safety_OK THEN
-    Motor_Contactor := FALSE;
-  END_IF;
+END_PROGRAM`;
 
-  Motor_Running := Motor_Contactor;
-
-END_PROGRAM`);
+  const [editorCode, setEditorCode] = useState(moduleState.editorCode || emptyProgramCode);
   
   const [vendor, setVendor] = useState((moduleState.vendor as "Rockwell" | "Siemens" | "Beckhoff"));
   const [showVendorDropdown, setShowVendorDropdown] = useState(false);
@@ -185,21 +182,27 @@ END_PROGRAM`);
       const existingTagNames = latestTags.map((tag: any) => tag.name);
       const newVariables = codeVariables.filter(varName => !existingTagNames.includes(varName));
 
+      // Skip sync if no new variables found (prevents syncing existing tags)
+      if (newVariables.length === 0) {
+        console.log('🔄 Skipping sync - no new variables found in code');
+        return;
+      }
+
       if (newVariables.length > 0) {
         console.log(`🔍 Found ${newVariables.length} new variables: ${newVariables.join(', ')}`);
         console.log('🔄 Syncing with project vendor (no manual selection needed)');
       }
 
       // Sync tags - backend will automatically use project vendor
-      console.log(`🔄 Syncing tags with project vendor`);
-      syncTags(vendor.toLowerCase(), code); // vendor parameter will be ignored by backend
+      console.log(`🔄 Syncing tags with project vendor for project ${currentProjectId}`);
+      syncTags(vendor.toLowerCase(), code); // ProjectSyncContext wrapper handles projectId automatically
 
     } catch (error) {
       console.error('Error in tag sync:', error);
       // Fallback to direct sync
       syncTags(vendor.toLowerCase(), code);
     }
-  }, [vendor, syncTags, latestTags]);
+  }, [vendor, syncTags, latestTags, currentProjectId]);
 
   // Enhanced autosave for project state (only in non-session mode)
   const projectId = currentProjectId ? parseInt(currentProjectId) : null;
@@ -346,6 +349,49 @@ END_PROGRAM`);
     };
   }, [projectId, getVersionData]);
 
+  // Listen for manual tag updates from Tag Database Manager
+  useEffect(() => {
+    const handleTagUpdate = async (event: Event) => {
+      const customEvent = event as CustomEvent;
+      const { projectId: updatedProjectId, action, tags } = customEvent.detail;
+
+      // Only handle updates for the current project
+      if (updatedProjectId === currentProjectId) {
+        console.log(`🏷️ Logic Studio: Received tag update for project ${updatedProjectId}, action: ${action}`);
+        
+        try {
+          // Reload tags and regenerate editor content
+          const updatedTags = await loadExistingTags();
+          
+          if (updatedTags && updatedTags.length > 0) {
+            console.log(`🏷️ Logic Studio: Regenerating editor with ${updatedTags.length} tags after manual update`);
+            const generatedSTCode = tagsToSTCodeWithScopes(updatedTags);
+            
+            // Only update if the code would actually change (avoid overwriting user edits)
+            if (generatedSTCode !== editorCode) {
+              setEditorCode(generatedSTCode);
+              lastSyncedCodeRef.current = generatedSTCode;
+            }
+          } else if (action === 'delete_all' || (action === 'delete' && !updatedTags.length)) {
+            // If all tags were deleted, reset to empty program
+            console.log(`🏷️ Logic Studio: All tags deleted, resetting to empty program`);
+            setEditorCode(emptyProgramCode);
+            lastSyncedCodeRef.current = emptyProgramCode;
+          }
+        } catch (error) {
+          console.error('Failed to update Logic Studio after tag changes:', error);
+        }
+      }
+    };
+
+    // Listen for tag database changes
+    window.addEventListener('pandaura:tags-updated', handleTagUpdate);
+    
+    return () => {
+      window.removeEventListener('pandaura:tags-updated', handleTagUpdate);
+    };
+  }, [currentProjectId, loadExistingTags, editorCode, emptyProgramCode]);
+
   // Fallback to module state for session mode
   const debouncedSave = useCallback(
     (() => {
@@ -380,13 +426,24 @@ END_PROGRAM`);
       let timeoutId: number;
       return () => {
         if (!sessionMode && isConnected && editorCode.trim()) {
-          // Only sync if code has actually changed
+          // Only sync if code has actually changed AND is not generated from existing tags
           if (editorCode !== lastSyncedCodeRef.current) {
             clearTimeout(timeoutId);
             timeoutId = setTimeout(() => {
               console.log('🔄 Syncing tags from Logic Studio - code changed');
               console.log('🔄 Previous code length:', lastSyncedCodeRef.current.length);
               console.log('🔄 New code length:', editorCode.length);
+              
+              // Check if this code change is from loading existing tags (avoid auto-sync in this case)
+              const isBasicProgramStructure = editorCode.includes('// Add your variables here') || 
+                                             editorCode.includes('// Add your logic here');
+              
+              if (isBasicProgramStructure) {
+                console.log('🔄 Skipping sync - appears to be basic program structure or loaded from existing tags');
+                lastSyncedCodeRef.current = editorCode;
+                return;
+              }
+
               lastSyncedCodeRef.current = editorCode;
 
               // Check if we need to prompt for vendor selection

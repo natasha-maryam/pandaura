@@ -19,6 +19,19 @@ export interface Tag {
  */
 export function tagToSTDeclaration(tag: Tag): string {
   const dataType = tag.data_type || tag.type || 'BOOL';
+  // Don't include address comments to prevent auto-sync issues
+  const description = tag.description ? ` // ${tag.description}` : '';
+  const defaultValue = tag.default_value ? ` := ${tag.default_value}` : '';
+  
+  return `  ${tag.name} : ${dataType}${defaultValue};${description}`;
+}
+
+/**
+ * Convert a single tag to ST variable declaration format with full details (including address)
+ * Use this for export/documentation purposes only
+ */
+export function tagToSTDeclarationWithAddress(tag: Tag): string {
+  const dataType = tag.data_type || tag.type || 'BOOL';
   const address = tag.address ? ` // address=${tag.address}` : '';
   const description = tag.description ? ` ${tag.description}` : '';
   const defaultValue = tag.default_value ? ` := ${tag.default_value}` : '';

@@ -10,47 +10,6 @@ interface Props {
   onChange: (code: string) => void;
 }
 
-const defaultTemplates: Record<string, string> = {
-  Rockwell: `PROGRAM Main
-    VAR
-        MotorStart : BOOL;
-        MotorStop : BOOL;
-        MotorRunning : BOOL;
-    END_VAR
-
-    IF MotorStart AND NOT MotorStop THEN
-        MotorRunning := TRUE;
-    ELSE
-        MotorRunning := FALSE;
-    END_IF;
-END_PROGRAM`,
-  Siemens: `PROGRAM Main
-    VAR
-        StartButton : BOOL;
-        StopButton : BOOL;
-        MotorState : BOOL;
-    END_VAR
-
-    IF StartButton = TRUE AND StopButton = FALSE THEN
-        MotorState := TRUE;
-    ELSE
-        MotorState := FALSE;
-    END_IF;
-END_PROGRAM`,
-  Beckhoff: `PROGRAM PLC_PRG
-    VAR
-        Start : BOOL;
-        Stop : BOOL;
-        Output : BOOL;
-    END_VAR
-
-    IF Start AND NOT Stop THEN
-        Output := TRUE;
-    ELSE
-        Output := FALSE;
-    END_IF;
-END_PROGRAM`,
-};
 
 export default function STEditor({ initialCode, vendorType, onChange }: Props) {
   const [code, setCode] = useState(initialCode);
@@ -63,13 +22,11 @@ export default function STEditor({ initialCode, vendorType, onChange }: Props) {
   const [toolbarPosition, setToolbarPosition] = useState({ x: 0, y: 0 });
 
   useEffect(() => {
-    // Auto-fill vendor-specific template if no code is provided
-    if (!initialCode && vendorType in defaultTemplates) {
-      const template = defaultTemplates[vendorType];
-      setCode(template);
-      onChange(template);
+    // Only update code when initialCode changes and is provided
+    if (initialCode !== code) {
+      setCode(initialCode);
     }
-  }, [initialCode, vendorType, onChange]);
+  }, [initialCode]);
 
   const handleEditorChange = (value: string | undefined) => {
     const updated = value || "";

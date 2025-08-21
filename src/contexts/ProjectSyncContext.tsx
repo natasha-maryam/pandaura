@@ -143,30 +143,49 @@ export function ProjectSyncProvider({ children }: ProjectSyncProviderProps) {
     }
 
     try {
-      console.log(`📂 Loading existing tags for project ${currentProjectId}`);
+      console.log(`📂 ProjectSyncContext: Loading existing tags for project ${currentProjectId}`);
+      console.log(`📂 ProjectSyncContext: Current URL:`, window.location.href);
 
       // Make API call to get existing tags using the correct endpoint
-      const token = localStorage.getItem('authToken');
-      if (!token) {
-        throw new Error('No authentication token found');
-      }
+      // Note: Using cookies for authentication (consistent with other API calls)
+      const apiUrl = `/api/v1/tags?projectId=${currentProjectId}&pageSize=1000`;
+      console.log(`📂 ProjectSyncContext: Making API call to:`, apiUrl);
 
-      const response = await fetch(`/api/v1/tags?projectId=${currentProjectId}&pageSize=1000`, {
+      const response = await fetch(apiUrl, {
         headers: {
-          'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
         },
-        credentials: 'include'
+        credentials: 'include' // This will include cookies for authentication
       });
 
+      console.log(`📂 ProjectSyncContext: API response status:`, response.status);
+      console.log(`📂 ProjectSyncContext: API response ok:`, response.ok);
+
       if (!response.ok) {
-        throw new Error(`Failed to load tags: ${response.statusText}`);
+        const errorText = await response.text();
+        console.error(`📂 ProjectSyncContext: API error response:`, errorText);
+        throw new Error(`Failed to load tags: ${response.statusText} - ${errorText}`);
       }
 
       const data = await response.json();
-      const tags = data.tags || [];
+      console.log(`📂 ProjectSyncContext: Raw API response data:`, data);
+      
+      const tags = data.tags || data || []; // Handle both { tags: [...] } and [...] formats
+      console.log(`📂 ProjectSyncContext: Extracted tags array:`, tags);
+      console.log(`📂 ProjectSyncContext: Loaded ${tags.length} existing tags for project ${currentProjectId}`);
 
-      console.log(`📂 Loaded ${tags.length} existing tags for project ${currentProjectId}`);
+      // Log each tag in detail
+      tags.forEach((tag: any, index: number) => {
+        console.log(`📂 ProjectSyncContext: Tag ${index + 1}:`, {
+          id: tag.id,
+          name: tag.name,
+          scope: tag.scope,
+          data_type: tag.data_type,
+          address: tag.address,
+          project_id: tag.project_id
+        });
+      });
+
       setLatestTags(tags);
 
       // Mark this project as loaded
@@ -174,7 +193,7 @@ export function ProjectSyncProvider({ children }: ProjectSyncProviderProps) {
 
       return tags;
     } catch (error) {
-      console.error('Error loading existing tags:', error);
+      console.error('📂 ProjectSyncContext: Error loading existing tags:', error);
       return [];
     }
   }, [currentProjectId, tagsLoaded, latestTags]); // Include dependencies

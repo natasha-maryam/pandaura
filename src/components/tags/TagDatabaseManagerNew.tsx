@@ -397,7 +397,7 @@ const TagDatabaseManagerContent: React.FC<TagDatabaseManagerProps> = ({
     }
 
     try {
-      await updateTag(tagId, buffered as any);
+      const updatedTag = await updateTag(tagId, buffered as any);
       // Show success toast once per flushed update
       showToast({
         variant: "success",
@@ -405,6 +405,17 @@ const TagDatabaseManagerContent: React.FC<TagDatabaseManagerProps> = ({
         message: `Changes saved`,
         duration: 3000,
       });
+      
+      // Emit event for Logic Studio to update
+      window.dispatchEvent(new CustomEvent('pandaura:tags-updated', {
+        detail: {
+          projectId: currentProjectId,
+          action: 'update',
+          tagId: tagId,
+          tagName: updatedTag?.name || 'Unknown'
+        }
+      }));
+      
       // Clear buffer for this tag after successful save
       setEditBuffer((prev) => {
         const copy = { ...prev };
@@ -465,6 +476,16 @@ const TagDatabaseManagerContent: React.FC<TagDatabaseManagerProps> = ({
         message: `Tag "${tagToDelete.name}" has been successfully deleted.`,
         duration: 4000,
       });
+      
+      // Emit event for Logic Studio to update
+      window.dispatchEvent(new CustomEvent('pandaura:tags-updated', {
+        detail: {
+          projectId: currentProjectId,
+          action: 'delete',
+          tagName: tagToDelete.name
+        }
+      }));
+      
       setShowDeleteModal(false);
       setTagToDelete(null);
     } catch (error) {
@@ -523,6 +544,15 @@ const TagDatabaseManagerContent: React.FC<TagDatabaseManagerProps> = ({
       // The success toast and modal closing will be handled by the modal component
       // Refresh the tags list
       await refreshTags();
+      
+      // Emit event for Logic Studio to update
+      window.dispatchEvent(new CustomEvent('pandaura:tags-updated', {
+        detail: {
+          projectId: currentProjectId,
+          action: 'create',
+          tagName: tagData.name
+        }
+      }));
     } catch (error) {
       console.error("Error creating tag:", error);
       throw error; // Re-throw to let the modal handle the error display
