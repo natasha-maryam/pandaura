@@ -166,7 +166,7 @@ export function useProject(projectId: number, autosaveInterval = 30000) {
       } else if (err.response?.status === 404) {
         errorMessage = `Project with ID ${projectId} not found.`;
       } else if (err.response?.status === 401) {
-        errorMessage = "Authentication required. Please log in again.";
+        errorMessage = "Your session has expired. Please log in again.";
       } else if (err.message) {
         errorMessage = err.message;
       }

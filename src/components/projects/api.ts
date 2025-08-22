@@ -155,7 +155,7 @@ export class ProjectsAPI {
     } catch (error: any) {
       console.error('ProjectsAPI.getProjects error:', error.response?.data || error.message);
       if (error.response?.status === 401) {
-        throw new Error('Authentication required. Please log in again.');
+        throw new Error('Your session has expired. Please log in again.');
       }
       if (error.response?.status === 403) {
         throw new Error('Access denied. Please check your permissions.');

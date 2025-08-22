@@ -37,6 +37,24 @@ interface LogicStudioProps {
 }
 
 export default function LogicStudio({ sessionMode = false }: LogicStudioProps) {
+  // One-time cleanup of localStorage containing unwanted template variables
+  useEffect(() => {
+    try {
+      const keys = Object.keys(localStorage);
+      const logicStudioKeys = keys.filter(key => key.includes('LogicStudio') || key.includes('moduleState'));
+      
+      logicStudioKeys.forEach(key => {
+        const value = localStorage.getItem(key);
+        if (value && (value.includes('from_model') || value.includes('second_one') || value.includes('test_debug'))) {
+          console.log('🧹 Clearing localStorage key with unwanted content:', key);
+          localStorage.removeItem(key);
+        }
+      });
+    } catch (error) {
+      console.warn('Error during localStorage cleanup:', error);
+    }
+  }, []);
+
   const { getModuleState, saveModuleState } = useModuleState();
 
   // Real-time tag sync
@@ -95,21 +113,14 @@ export default function LogicStudio({ sessionMode = false }: LogicStudioProps) {
           console.log(`📂 Populated editor with ${tags.length} existing tags`);
         } else {
           console.log(`📂 No existing tags found for project ${currentProjectId}`);
-          console.log(`📂 Setting editor to empty PROGRAM structure`);
+          console.log(`📂 Setting editor to empty`);
 
-          // Set empty PROGRAM structure when no tags exist
-          const emptyProgramCode = `PROGRAM Main
-    VAR
-        // Add your variables here
-    END_VAR
+          // Set completely empty editor when no tags exist
+          const emptyContent = ``;
 
-    // Add your logic here
-
-END_PROGRAM`;
-
-          setEditorCode(emptyProgramCode);
-          lastSyncedCodeRef.current = emptyProgramCode; // Prevent immediate sync
-          console.log(`📂 Set editor to empty PROGRAM structure`);
+          setEditorCode(emptyContent);
+          lastSyncedCodeRef.current = emptyContent; // Prevent immediate sync
+          console.log(`📂 Set editor to empty content`);
         }
       }).catch((error: any) => {
         console.error('Failed to load existing tags:', error);
@@ -121,19 +132,23 @@ END_PROGRAM`;
 
 
   
-  // Get persisted state or use defaults
+  // Get persisted state or use defaults - but clear if it contains unwanted content
   const moduleState = getModuleState('LogicStudio');
+  
+  // Check if saved editor code contains unwanted template variables and clear it
+  const unwantedVariables = ['from_model', 'second_one', 'test_debug'];
+  const hasSavedUnwantedVars = moduleState.editorCode && 
+    unwantedVariables.some(varName => moduleState.editorCode.includes(varName));
+  
+  if (hasSavedUnwantedVars) {
+    console.log('🧹 Clearing saved editor state with unwanted template variables');
+    moduleState.editorCode = '';
+  }
+  
   const [prompt, setPrompt] = useState(moduleState.prompt || "");
   
-  // Start with empty program structure for new projects
-  const emptyProgramCode = `PROGRAM Main
-  VAR
-    // Add your variables here
-  END_VAR
-
-  // Add your logic here
-
-END_PROGRAM`;
+  // Start with completely empty editor for new projects
+  const emptyProgramCode = ``;
 
   const [editorCode, setEditorCode] = useState(moduleState.editorCode || emptyProgramCode);
   
@@ -173,14 +188,36 @@ END_PROGRAM`;
   // Handle tag sync - now uses project vendor automatically
   const handleTagSyncWithVendorCheck = useCallback(async (code: string) => {
     try {
+      console.log('🔍 DEBUG: Full code being parsed:', code);
+      
+      // Block any code that contains these unwanted template variables
+      const unwantedVariables = ['from_model', 'second_one', 'test_debug'];
+      const hasUnwantedVars = unwantedVariables.some(varName => code.includes(varName));
+      
+      if (hasUnwantedVars) {
+        console.log('🚫 BLOCKED: Code contains unwanted template variables, skipping sync');
+        console.log('🚫 Unwanted variables detected:', unwantedVariables.filter(v => code.includes(v)));
+        return;
+      }
+      
       // Parse the code to extract variable declarations for logging
       const variablePattern = /^\s*(\w+)\s*:\s*(\w+)(?:\s*:=\s*[^;]+)?;/gm;
       const matches = [...code.matchAll(variablePattern)];
       const codeVariables = matches.map(match => match[1]);
 
+      console.log('🔍 DEBUG: Regex matches found:', matches.map(m => ({ 
+        fullMatch: m[0], 
+        variableName: m[1], 
+        dataType: m[2] 
+      })));
+      console.log('🔍 DEBUG: Extracted variable names:', codeVariables);
+
       // Check if any variables in code don't exist in current tags
       const existingTagNames = latestTags.map((tag: any) => tag.name);
       const newVariables = codeVariables.filter(varName => !existingTagNames.includes(varName));
+
+      console.log('🔍 DEBUG: Existing tag names:', existingTagNames);
+      console.log('🔍 DEBUG: New variables detected:', newVariables);
 
       // Skip sync if no new variables found (prevents syncing existing tags)
       if (newVariables.length === 0) {
@@ -373,10 +410,10 @@ END_PROGRAM`;
               lastSyncedCodeRef.current = generatedSTCode;
             }
           } else if (action === 'delete_all' || (action === 'delete' && !updatedTags.length)) {
-            // If all tags were deleted, reset to empty program
-            console.log(`🏷️ Logic Studio: All tags deleted, resetting to empty program`);
-            setEditorCode(emptyProgramCode);
-            lastSyncedCodeRef.current = emptyProgramCode;
+            // If all tags were deleted, reset to empty
+            console.log(`🏷️ Logic Studio: All tags deleted, resetting to empty`);
+            setEditorCode('');
+            lastSyncedCodeRef.current = '';
           }
         } catch (error) {
           console.error('Failed to update Logic Studio after tag changes:', error);
@@ -434,16 +471,16 @@ END_PROGRAM`;
               console.log('🔄 Previous code length:', lastSyncedCodeRef.current.length);
               console.log('🔄 New code length:', editorCode.length);
               
-              // Check if this code change is from loading existing tags (avoid auto-sync in this case)
-              const isBasicProgramStructure = editorCode.includes('// Add your variables here') || 
-                                             editorCode.includes('// Add your logic here');
+              // Only skip sync if the editor is completely empty or contains only whitespace/comments
+              const codeWithoutComments = editorCode.replace(/\/\/.*$/gm, '').replace(/\/\*[\s\S]*?\*\//g, '').trim();
               
-              if (isBasicProgramStructure) {
-                console.log('🔄 Skipping sync - appears to be basic program structure or loaded from existing tags');
+              if (!codeWithoutComments) {
+                console.log('🔄 Skipping sync - editor is empty or contains only comments');
                 lastSyncedCodeRef.current = editorCode;
                 return;
               }
 
+              console.log('🔄 Code contains actual content, proceeding with sync');
               lastSyncedCodeRef.current = editorCode;
 
               // Check if we need to prompt for vendor selection
@@ -486,36 +523,10 @@ END_PROGRAM`;
   }, []);
 
   const handleGenerateLogic = useCallback(() => {
-    if (!prompt.trim()) {
-      alert("Please enter a description of the logic you want to generate.");
-      return;
-    }
-    
-    console.log("Generating logic from prompt:", prompt);
-    const generatedLogic = `// Generated from: "${prompt}"
-PROGRAM Generated_Logic
-  VAR
-    // Auto-generated variables based on prompt
-    Input_Signal : BOOL;
-    Output_Signal : BOOL;
-    Process_Active : BOOL;
-  END_VAR
-
-  // Generated logic based on your description
-  IF Input_Signal THEN
-    Process_Active := TRUE;
-    Output_Signal := Process_Active;
-  ELSE
-    Process_Active := FALSE;
-    Output_Signal := FALSE;
-  END_IF;
-
-END_PROGRAM`;
-    
-    setEditorCode(generatedLogic);
-    setPrompt("");
-    alert("Logic generated successfully! Review the code in the editor above.");
-  }, [prompt]);
+    // Functionality disabled to prevent unwanted tag generation
+    console.log("Generate Logic functionality disabled");
+    alert("Generate Logic functionality has been disabled to prevent unwanted tag creation.");
+  }, []);
 
   const handlePromptKeyPress = useCallback((e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) {
@@ -613,17 +624,10 @@ END_PROGRAM`;
                     lastSyncedCodeRef.current = generatedSTCode;
                     console.log(`🔄 Refreshed editor with ${tags.length} tags`);
                   } else {
-                    const emptyProgramCode = `PROGRAM Main
-    VAR
-        // Add your variables here
-    END_VAR
-
-    // Add your logic here
-
-END_PROGRAM`;
-                    setEditorCode(emptyProgramCode);
-                    lastSyncedCodeRef.current = emptyProgramCode;
-                    console.log('🔄 No tags found, set empty program structure');
+                    const emptyContent = ``;
+                    setEditorCode(emptyContent);
+                    lastSyncedCodeRef.current = emptyContent;
+                    console.log('🔄 No tags found, set empty content');
                   }
                 }).catch((error: any) => {
                   console.error('Failed to refresh tags:', error);
@@ -850,15 +854,15 @@ END_PROGRAM`;
               <UploadCloud className={`text-primary ${collapseLevel === 2 ? 'w-4 h-4' : 'w-5 h-5'}`} />
             </button>
 
-            {/* Generate Button */}
+            {/* Generate Button - DISABLED */}
             <button
-              onClick={handleGenerateLogic}
-              className={`bg-primary text-white rounded-md shadow-sm text-sm hover:bg-secondary transition-all whitespace-nowrap ${
+              onClick={() => alert("Generate Logic functionality is disabled to prevent unwanted tag creation.")}
+              className={`bg-gray-400 text-white rounded-md shadow-sm text-sm cursor-not-allowed ${
                 collapseLevel === 2 ? 'px-4 py-2 min-h-[40px]' : 'px-6 py-3 min-h-[60px]'
               }`}
-              disabled={!prompt.trim()}
+              disabled={true}
             >
-              {collapseLevel === 2 ? 'Generate' : 'Generate Logic'}
+              {collapseLevel === 2 ? 'Generate (Disabled)' : 'Generate Logic (Disabled)'}
             </button>
           </div>
 
