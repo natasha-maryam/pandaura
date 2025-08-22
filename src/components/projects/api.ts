@@ -45,6 +45,7 @@ export interface ProjectVersion {
     project_name: string;
     timestamp: number;
   };
+  data?: any; // The actual Logic Studio state from the database
 }
 
 export interface CreateVersionData {
@@ -303,7 +304,11 @@ export class ProjectsAPI {
    */
   static async createVersion(projectId: number, data: CreateVersionData): Promise<number> {
     try {
+      console.log('ProjectsAPI: Creating version for project', projectId, 'with data:', data);
+      
       const response = await api.post<{ success: boolean; versionId: number }>(`/projects/${projectId}/create-version`, data);
+
+      console.log('ProjectsAPI: Create version response:', response.data);
 
       if (!response.data.success) {
         throw new Error('Failed to create version');
@@ -311,6 +316,9 @@ export class ProjectsAPI {
 
       return response.data.versionId;
     } catch (error: any) {
+      console.error('ProjectsAPI: Error creating version:', error);
+      console.error('ProjectsAPI: Error response:', error.response?.data);
+      
       if (error.response?.data?.error) {
         throw new Error(error.response.data.error);
       }
@@ -323,16 +331,22 @@ export class ProjectsAPI {
    */
   static async getVersion(projectId: number, versionNumber: number): Promise<any> {
     try {
-      // Get version history and find the specific version
-      const versions = await this.getVersionHistory(projectId);
-      const version = versions.find(v => v.version_number === versionNumber);
+      console.log('ProjectsAPI: Getting full version data for project', projectId, 'version', versionNumber);
+      
+      const response = await api.get<{ success: boolean; data: any }>(`/projects/${projectId}/version/${versionNumber}`);
 
-      if (!version) {
-        throw new Error(`Version ${versionNumber} not found`);
+      if (!response.data.success) {
+        throw new Error('Failed to get version data');
       }
 
-      return version.snapshot_info;
+      // The backend now returns data as an object directly (not a JSON string)
+      const versionData = response.data.data;
+      console.log('ProjectsAPI: Retrieved version data:', versionData);
+      
+      return versionData;
     } catch (error: any) {
+      console.error('ProjectsAPI: Error getting version data:', error);
+      
       if (error.response?.data?.error) {
         throw new Error(error.response.data.error);
       }
@@ -345,12 +359,16 @@ export class ProjectsAPI {
    */
   static async rollbackToVersion(projectId: number, versionNumber: number): Promise<{ rolledBackTo: number; newVersion: number }> {
     try {
+      console.log('ProjectsAPI: Rolling back project', projectId, 'to version', versionNumber);
+      
       const response = await api.post<{ 
         success: boolean; 
         rolledBackTo: number; 
         newVersion: number;
         message: string;
-      }>(`/versions/projects/${projectId}/version/${versionNumber}/rollback`);
+      }>(`/projects/${projectId}/version/${versionNumber}/rollback`);
+
+      console.log('ProjectsAPI: Rollback response:', response.data);
 
       if (!response.data.success) {
         throw new Error('Failed to rollback to version');
@@ -361,6 +379,9 @@ export class ProjectsAPI {
         newVersion: response.data.newVersion
       };
     } catch (error: any) {
+      console.error('ProjectsAPI: Error rolling back:', error);
+      console.error('ProjectsAPI: Error response:', error.response?.data);
+      
       if (error.response?.data?.error) {
         throw new Error(error.response.data.error);
       }
@@ -396,7 +417,7 @@ export class ProjectsAPI {
    */
   static async getVersionSnapshot(projectId: number, versionNumber: number): Promise<any> {
     try {
-      const response = await api.get<{ success: boolean; data: any }>(`/versions/projects/${projectId}/version/${versionNumber}`);
+      const response = await api.get<{ success: boolean; data: any }>(`/projects/${projectId}/version/${versionNumber}`);
 
       if (!response.data.success) {
         throw new Error('Failed to get version snapshot');

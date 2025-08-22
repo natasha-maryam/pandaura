@@ -605,8 +605,8 @@ export default function LogicStudio({ sessionMode = false }: LogicStudioProps) {
               }}
               onRollback={(versionNumber) => {
                 console.log('Rollback completed in Logic Studio:', versionNumber);
-                // Refresh the page or reload state after rollback
-                window.location.reload();
+                // The rollback event listener will handle state restoration
+                // No need to reload the page as the event system handles it
               }}
               className="border-l border-gray-200 pl-3"
             />

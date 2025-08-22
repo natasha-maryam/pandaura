@@ -3,6 +3,7 @@ import { Save, History, GitBranch, Clock, MessageSquare } from 'lucide-react';
 import  Button  from './Button';
 import Modal from './Modal';
 import { useVersionControl } from '../../hooks/useVersionControl';
+import { useToast } from './Toast';
 
 interface VersionControlToolbarProps {
   projectId: number;
@@ -88,6 +89,7 @@ export default function VersionControlToolbar({
   const [showSaveModal, setShowSaveModal] = useState(false);
   const [showHistoryModal, setShowHistoryModal] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const { showToast } = useToast();
 
   const {
     versions,
@@ -111,9 +113,22 @@ export default function VersionControlToolbar({
       
       setShowSaveModal(false);
       onVersionCreated?.(versionNumber);
+      
+      // Show success toast
+      showToast({
+        variant: 'success',
+        title: 'Version Saved Successfully!',
+        message: `Version ${versionNumber} has been saved with message: "${message}"`,
+        duration: 4000
+      });
     } catch (error) {
       console.error('Failed to create version:', error);
-      alert('Failed to save version. Please try again.');
+      showToast({
+        variant: 'error',
+        title: 'Save Failed',
+        message: 'Failed to save version. Please try again.',
+        duration: 4000
+      });
     } finally {
       setIsSaving(false);
     }
@@ -123,9 +138,16 @@ export default function VersionControlToolbar({
     try {
       await rollbackToVersion(versionNumber);
       onRollback?.(versionNumber);
+      
+      // Note: Toast notification is already shown by the rollbackToVersion function in useVersionControl
     } catch (error) {
       console.error('Failed to rollback:', error);
-      alert('Failed to rollback to version. Please try again.');
+      showToast({
+        variant: 'error',
+        title: 'Rollback Failed',
+        message: 'Failed to rollback to version. Please try again.',
+        duration: 5000
+      });
     }
   };
 

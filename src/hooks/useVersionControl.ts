@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { ProjectsAPI, ProjectVersion, CreateVersionData } from '../components/projects/api';
+import { useToast } from '../components/ui/Toast';
 
 interface UseVersionControlOptions {
   projectId: number;
@@ -40,6 +41,7 @@ export function useVersionControl({
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [lastVersionTime, setLastVersionTime] = useState<Date | null>(null);
+  const { showToast } = useToast();
 
   // Load version history
   const refreshVersions = useCallback(async () => {
@@ -79,22 +81,44 @@ export function useVersionControl({
     try {
       setError(null);
       
+      console.log('useVersionControl: Creating version with state:', state);
+      console.log('useVersionControl: Creating version with message:', message);
+      
       const versionData: CreateVersionData = {
         state: state || {}, // If no state provided, use empty object
         message: message || `Manual save - ${new Date().toLocaleString()}`
       };
       
+      console.log('useVersionControl: Sending version data:', versionData);
+      
       const versionNumber = await ProjectsAPI.createVersion(projectId, versionData);
+      
+      console.log('useVersionControl: Version created successfully:', versionNumber);
+      
+      // Show success toast
+      showToast({
+        variant: 'success',
+        title: 'Version Saved',
+        message: `Version ${versionNumber} saved successfully`,
+        duration: 3000
+      });
       
       // Refresh version history
       await refreshVersions();
       
       return versionNumber;
     } catch (err: any) {
+      console.error('useVersionControl: Error creating version:', err);
       setError(err.message || 'Failed to create version');
+      showToast({
+        variant: 'error',
+        title: 'Save Failed',
+        message: err.message || 'Failed to create version',
+        duration: 5000
+      });
       throw err;
     }
-  }, [projectId, refreshVersions]);
+  }, [projectId, refreshVersions, showToast]);
 
   // Rollback to a specific version (Enhanced)
   const rollbackToVersion = useCallback(async (versionNumber: number): Promise<void> => {
@@ -106,6 +130,14 @@ export function useVersionControl({
       const result = await ProjectsAPI.rollbackToVersion(projectId, versionNumber);
       
       console.log(`Enhanced rollback completed: rolled back to version ${result.rolledBackTo}, created new version ${result.newVersion}`);
+      
+      // Show success toast
+      showToast({
+        variant: 'success',
+        title: 'Rollback Successful',
+        message: `Rolled back to version ${result.rolledBackTo}. New version ${result.newVersion} created.`,
+        duration: 4000
+      });
       
       // Refresh version history to show the new rollback version
       await refreshVersions();
@@ -133,9 +165,15 @@ export function useVersionControl({
       
     } catch (err: any) {
       setError(err.message || 'Failed to rollback to version');
+      showToast({
+        variant: 'error',
+        title: 'Rollback Failed',
+        message: err.message || 'Failed to rollback to version',
+        duration: 5000
+      });
       throw err;
     }
-  }, [projectId, refreshVersions]);
+  }, [projectId, refreshVersions, showToast]);
 
   // Get version data
   const getVersionData = useCallback(async (versionNumber: number): Promise<any> => {

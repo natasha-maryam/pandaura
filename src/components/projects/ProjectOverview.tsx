@@ -439,6 +439,7 @@ const {
       {/* Version Diff Modal */}
       <VersionDiffModal
         version={selectedVersionForDiff}
+        projectId={project.id}
         onClose={() => setSelectedVersionForDiff(null)}
         onRollback={(version) => {
           handleRollback(version);

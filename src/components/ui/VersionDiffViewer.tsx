@@ -25,7 +25,37 @@ function formatValue(value: any): string {
   if (value === null || value === undefined) return '';
   if (typeof value === 'string') return value;
   if (typeof value === 'boolean') return value ? 'Yes' : 'No';
-  if (typeof value === 'object') return JSON.stringify(value, null, 2);
+  if (typeof value === 'number') return String(value);
+  if (typeof value === 'object') {
+    // Handle arrays
+    if (Array.isArray(value)) {
+      return value.length > 0 ? value.join(', ') : 'None';
+    }
+    
+    // Handle objects - format for better readability
+    if (Object.keys(value).length === 0) return 'None';
+    
+    // Format metadata objects in a more readable way
+    const formatted = Object.entries(value)
+      .filter(([_, val]) => val !== null && val !== undefined && val !== '')
+      .map(([key, val]) => {
+        const label = key.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase());
+        
+        if (typeof val === 'boolean') {
+          return `${label}: ${val ? 'Yes' : 'No'}`;
+        }
+        if (typeof val === 'object' && val !== null) {
+          return `${label}: ${JSON.stringify(val)}`;
+        }
+        if (typeof val === 'string' && val.length > 50) {
+          return `${label}: ${val.substring(0, 50)}...`;
+        }
+        return `${label}: ${val}`;
+      })
+      .join('\n');
+    
+    return formatted || 'Empty';
+  }
   return String(value);
 }
 
@@ -157,6 +187,7 @@ export default function VersionDiffViewer({
 
     // Module-specific sections
     if (fromData.module === 'LogicStudio' || toData.module === 'LogicStudio') {
+      // PLC Code Section
       sections.push({
         key: 'editorCode',
         label: 'PLC Code',
@@ -166,6 +197,7 @@ export default function VersionDiffViewer({
         hasChanges: (fromData.editorCode || '') !== (toData.editorCode || '')
       });
 
+      // AI Prompt Section
       sections.push({
         key: 'prompt',
         label: 'AI Prompt',
@@ -175,6 +207,7 @@ export default function VersionDiffViewer({
         hasChanges: (fromData.prompt || '') !== (toData.prompt || '')
       });
 
+      // PLC Vendor Section
       sections.push({
         key: 'vendor',
         label: 'PLC Vendor',
@@ -182,6 +215,110 @@ export default function VersionDiffViewer({
         fromValue: fromData.vendor || 'siemens',
         toValue: toData.vendor || 'siemens',
         hasChanges: (fromData.vendor || 'siemens') !== (toData.vendor || 'siemens')
+      });
+
+      // Logic Studio Metadata Section
+      const fromMetadata = {
+        projectName: fromData.projectName || '',
+        clientName: fromData.clientName || '',
+        projectType: fromData.projectType || '',
+        description: fromData.description || '',
+        lastActivity: fromData.lastActivity || '',
+        module: fromData.module || '',
+        totalLines: fromData.editorCode ? fromData.editorCode.split('\n').length : 0,
+        promptLength: fromData.prompt ? fromData.prompt.length : 0,
+        timestamp: fromData.timestamp || '',
+        collapseLevel: fromData.collapseLevel || 0,
+        editorSettings: fromData.editorSettings || {},
+        tags: fromData.tags || [],
+        hasPrompt: !!(fromData.prompt && fromData.prompt.trim()),
+        hasCode: !!(fromData.editorCode && fromData.editorCode.trim()),
+        codeComplexity: fromData.editorCode ? (fromData.editorCode.match(/\n/g) || []).length : 0
+      };
+
+      const toMetadata = {
+        projectName: toData.projectName || '',
+        clientName: toData.clientName || '',
+        projectType: toData.projectType || '',
+        description: toData.description || '',
+        lastActivity: toData.lastActivity || '',
+        module: toData.module || '',
+        totalLines: toData.editorCode ? toData.editorCode.split('\n').length : 0,
+        promptLength: toData.prompt ? toData.prompt.length : 0,
+        timestamp: toData.timestamp || '',
+        collapseLevel: toData.collapseLevel || 0,
+        editorSettings: toData.editorSettings || {},
+        tags: toData.tags || [],
+        hasPrompt: !!(toData.prompt && toData.prompt.trim()),
+        hasCode: !!(toData.editorCode && toData.editorCode.trim()),
+        codeComplexity: toData.editorCode ? (toData.editorCode.match(/\n/g) || []).length : 0
+      };
+
+      sections.push({
+        key: 'logicStudioMetadata',
+        label: 'Logic Studio Metadata',
+        icon: FileText,
+        fromValue: fromMetadata,
+        toValue: toMetadata,
+        hasChanges: JSON.stringify(fromMetadata) !== JSON.stringify(toMetadata)
+      });
+
+      // Project Information Section
+      const fromProjectInfo = {
+        projectName: fromData.projectName || '',
+        clientName: fromData.clientName || '',
+        projectType: fromData.projectType || '',
+        description: fromData.description || ''
+      };
+
+      const toProjectInfo = {
+        projectName: toData.projectName || '',
+        clientName: toData.clientName || '',
+        projectType: toData.projectType || '',
+        description: toData.description || ''
+      };
+
+      sections.push({
+        key: 'projectInfo',
+        label: 'Project Information',
+        icon: FileText,
+        fromValue: fromProjectInfo,
+        toValue: toProjectInfo,
+        hasChanges: JSON.stringify(fromProjectInfo) !== JSON.stringify(toProjectInfo)
+      });
+
+      // Editor Settings Section
+      if (fromData.editorSettings || toData.editorSettings) {
+        sections.push({
+          key: 'editorSettings',
+          label: 'Editor Settings',
+          icon: Code,
+          fromValue: fromData.editorSettings || {},
+          toValue: toData.editorSettings || {},
+          hasChanges: JSON.stringify(fromData.editorSettings || {}) !== JSON.stringify(toData.editorSettings || {})
+        });
+      }
+
+      // Activity Tracking Section
+      const fromActivity = {
+        lastActivity: fromData.lastActivity || '',
+        timestamp: fromData.timestamp || '',
+        collapseLevel: fromData.collapseLevel || 0
+      };
+
+      const toActivity = {
+        lastActivity: toData.lastActivity || '',
+        timestamp: toData.timestamp || '',
+        collapseLevel: toData.collapseLevel || 0
+      };
+
+      sections.push({
+        key: 'activityTracking',
+        label: 'Activity & State',
+        icon: Database,
+        fromValue: fromActivity,
+        toValue: toActivity,
+        hasChanges: JSON.stringify(fromActivity) !== JSON.stringify(toActivity)
       });
     }
 
