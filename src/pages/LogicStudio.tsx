@@ -372,9 +372,39 @@ export default function LogicStudio({ sessionMode = false }: LogicStudioProps) {
     window.addEventListener('pandaura:project-rollback', handleRollback);
     window.addEventListener('pandaura:project-state-changed', handleProjectStateChange);
     
+    // Listen for current state requests from version control
+    const handleCurrentStateRequest = (event: Event) => {
+      const customEvent = event as CustomEvent;
+      const { projectId: requestedProjectId } = customEvent.detail;
+      
+      if (requestedProjectId === projectId) {
+        console.log('Logic Studio: Current state requested for version control');
+        // Emit current state for version control to capture
+        window.dispatchEvent(new CustomEvent('pandaura:current-state-response', {
+          detail: {
+            projectId,
+            module: 'LogicStudio',
+            state: {
+              prompt,
+              editorCode,
+              showPendingChanges,
+              showAISuggestions,
+              vendorContextEnabled,
+              isCollapsed,
+              collapseLevel,
+              lastActivity: new Date().toISOString()
+            }
+          }
+        }));
+      }
+    };
+    
+    window.addEventListener('pandaura:get-current-state', handleCurrentStateRequest);
+    
     return () => {
       window.removeEventListener('pandaura:project-rollback', handleRollback);
       window.removeEventListener('pandaura:project-state-changed', handleProjectStateChange);
+      window.removeEventListener('pandaura:get-current-state', handleCurrentStateRequest);
     };
   }, [projectId, getVersionData]);
 

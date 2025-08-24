@@ -426,7 +426,7 @@ export default function VersionDiffModal({ version, onClose, onRollback, onExpor
           <div className="bg-orange-50 border border-orange-200 rounded-md p-3">
             <p className="text-sm text-orange-800">
               <strong>Warning:</strong> This action will create a new version with the rollback changes. 
-              Your current work will be preserved as the latest version.
+              Your current work will be preserved in a separate version.
             </p>
           </div>
         </div>

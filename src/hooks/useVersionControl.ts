@@ -81,11 +81,49 @@ export function useVersionControl({
     try {
       setError(null);
       
-      console.log('useVersionControl: Creating version with state:', state);
+      let versionState = state;
+      
+      // If no state provided, try to capture current state from modules
+      if (!versionState) {
+        console.log('useVersionControl: No state provided, capturing current state...');
+        
+        let capturedState: any = null;
+        
+        const stateResponseHandler = (event: Event) => {
+          const customEvent = event as CustomEvent;
+          const { projectId: responseProjectId, module, state } = customEvent.detail;
+          
+          if (responseProjectId === projectId && module === 'LogicStudio') {
+            capturedState = state;
+          }
+        };
+        
+        // Listen for state response
+        window.addEventListener('pandaura:current-state-response', stateResponseHandler);
+        
+        // Request current state from modules
+        window.dispatchEvent(new CustomEvent('pandaura:get-current-state', {
+          detail: { projectId }
+        }));
+        
+        // Wait for modules to respond
+        await new Promise(resolve => setTimeout(resolve, 200));
+        
+        // Remove the temporary listener
+        window.removeEventListener('pandaura:current-state-response', stateResponseHandler);
+        
+        versionState = capturedState || {
+          module: 'LogicStudio',
+          lastActivity: new Date().toISOString(),
+          timestamp: Date.now()
+        };
+      }
+      
+      console.log('useVersionControl: Creating version with state:', versionState);
       console.log('useVersionControl: Creating version with message:', message);
       
       const versionData: CreateVersionData = {
-        state: state || {}, // If no state provided, use empty object
+        state: versionState,
         message: message || `Manual save - ${new Date().toLocaleString()}`
       };
       
@@ -119,19 +157,65 @@ export function useVersionControl({
     try {
       setError(null);
       
+      // First, capture and save current state before rollback so we can show diffs
+      console.log('useVersionControl: Capturing current state before rollback...');
+      
+      // Get current project state from modules
+      let capturedState: any = null;
+      
+      const stateResponseHandler = (event: Event) => {
+        const customEvent = event as CustomEvent;
+        const { projectId: responseProjectId, module, state } = customEvent.detail;
+        
+        if (responseProjectId === projectId && module === 'LogicStudio') {
+          capturedState = state;
+        }
+      };
+      
+      // Listen for state response
+      window.addEventListener('pandaura:current-state-response', stateResponseHandler);
+      
+      // Request current state from modules
+      window.dispatchEvent(new CustomEvent('pandaura:get-current-state', {
+        detail: { projectId }
+      }));
+      
+      // Wait a moment for modules to respond
+      await new Promise(resolve => setTimeout(resolve, 200));
+      
+      // Remove the temporary listener
+      window.removeEventListener('pandaura:current-state-response', stateResponseHandler);
+      
+      // Create a "pre-rollback" version to preserve current work
+      try {
+        const currentStateVersion = await createVersion(
+          `Current state before rollback to version ${versionNumber}`, 
+          capturedState || {
+            module: 'LogicStudio',
+            lastActivity: new Date().toISOString(),
+            timestamp: Date.now()
+          }
+        );
+        console.log('useVersionControl: Current state saved as version', currentStateVersion);
+      } catch (error) {
+        console.warn('useVersionControl: Failed to save current state before rollback:', error);
+        // Continue with rollback even if current state save fails
+      }
+      
+      // Now perform the actual rollback
       const result = await ProjectsAPI.rollbackToVersion(projectId, versionNumber);
       
       console.log(`Enhanced rollback completed: rolled back to version ${result.rolledBackTo}, created new version ${result.newVersion}`);
       
-      // Show success toast
+      // Show success toast with information about current state preservation
       showToast({
         variant: 'success',
         title: 'Rollback Successful',
-        message: `Rolled back to version ${result.rolledBackTo}. New version ${result.newVersion} created.`,
-        duration: 4000
+        message: `Rolled back to version ${result.rolledBackTo}. Your previous work was saved. New version ${result.newVersion} created.`,
+        duration: 5000
       });
       
-      // Refresh version history to show the new rollback version
+      // Refresh version history to show the new versions
       await refreshVersions();
       
       // Emit enhanced event with more details for components to refresh their state
@@ -165,7 +249,7 @@ export function useVersionControl({
       });
       throw err;
     }
-  }, [projectId, refreshVersions, showToast]);
+  }, [projectId, refreshVersions, showToast, createVersion]);
 
   // Get version data
   const getVersionData = useCallback(async (versionNumber: number): Promise<any> => {

@@ -21,9 +21,15 @@ interface DiffSection {
   hasChanges: boolean;
 }
 
-function formatValue(value: any): string {
+function formatValue(value: any, isCode = false): string {
   if (value === null || value === undefined) return '';
-  if (typeof value === 'string') return value;
+  if (typeof value === 'string') {
+    // Special formatting for code
+    if (isCode && value.trim()) {
+      return value; // Return code as-is for proper formatting
+    }
+    return value;
+  }
   if (typeof value === 'boolean') return value ? 'Yes' : 'No';
   if (typeof value === 'number') return String(value);
   if (typeof value === 'object') {
@@ -66,6 +72,11 @@ function DiffSectionComponent({ section, isExpanded, onToggle }: {
 }) {
   const Icon = section.icon;
   
+  // Special handling for different section types
+  const isCodeSection = section.key === 'editorCode';
+  const isTagsSection = section.key === 'tags';
+  const isMetadataSection = section.key === 'metadata';
+  
   return (
     <div className="border border-gray-200 rounded-lg mb-3">
       <div
@@ -82,6 +93,11 @@ function DiffSectionComponent({ section, isExpanded, onToggle }: {
               Changed
             </span>
           )}
+          {isCodeSection && section.hasChanges && (
+            <span className="bg-blue-100 text-blue-700 text-xs px-2 py-0.5 rounded-full">
+              Code Modified
+            </span>
+          )}
         </div>
         {isExpanded ? (
           <ChevronDown className="w-4 h-4 text-gray-400" />
@@ -96,22 +112,58 @@ function DiffSectionComponent({ section, isExpanded, onToggle }: {
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <h4 className="text-sm font-medium text-gray-700 mb-2">
-                  Version {section.key === 'from' ? 'From' : 'To'}
+                  Previous Version {isCodeSection ? '(Before)' : ''}
                 </h4>
                 <div className="bg-red-50 border border-red-200 rounded p-2">
-                  <pre className="text-sm text-gray-800 whitespace-pre-wrap">
-                    {formatValue(section.fromValue)}
-                  </pre>
+                  {isTagsSection ? (
+                    <div className="flex flex-col gap-1">
+                      {Array.isArray(section.fromValue) && section.fromValue.length > 0 ? (
+                        section.fromValue.map((tag: any, index: number) => (
+                          <span key={index} className="inline-block bg-gray-100 text-gray-700 px-2 py-1 rounded text-xs">
+                            {typeof tag === 'string' ? tag : tag.name || JSON.stringify(tag)}
+                          </span>
+                        ))
+                      ) : (
+                        <span className="text-gray-400 text-xs">No tags</span>
+                      )}
+                    </div>
+                  ) : isMetadataSection ? (
+                    <pre className="text-xs text-gray-800 whitespace-pre-wrap font-mono overflow-auto max-h-96">
+                      {JSON.stringify(section.fromValue, null, 2)}
+                    </pre>
+                  ) : (
+                    <pre className={`text-sm text-gray-800 whitespace-pre-wrap ${isCodeSection ? 'font-mono' : ''}`}>
+                      {formatValue(section.fromValue, isCodeSection)}
+                    </pre>
+                  )}
                 </div>
               </div>
               <div>
                 <h4 className="text-sm font-medium text-gray-700 mb-2">
-                  Version {section.key === 'to' ? 'To' : 'From'}
+                  Current Version {isCodeSection ? '(After)' : ''}
                 </h4>
                 <div className="bg-green-50 border border-green-200 rounded p-2">
-                  <pre className="text-sm text-gray-800 whitespace-pre-wrap">
-                    {formatValue(section.toValue)}
-                  </pre>
+                  {isTagsSection ? (
+                    <div className="flex flex-col gap-1">
+                      {Array.isArray(section.toValue) && section.toValue.length > 0 ? (
+                        section.toValue.map((tag: any, index: number) => (
+                          <span key={index} className="inline-block bg-gray-100 text-gray-700 px-2 py-1 rounded text-xs">
+                            {typeof tag === 'string' ? tag : tag.name || JSON.stringify(tag)}
+                          </span>
+                        ))
+                      ) : (
+                        <span className="text-gray-400 text-xs">No tags</span>
+                      )}
+                    </div>
+                  ) : isMetadataSection ? (
+                    <pre className="text-xs text-gray-800 whitespace-pre-wrap font-mono overflow-auto max-h-96">
+                      {JSON.stringify(section.toValue, null, 2)}
+                    </pre>
+                  ) : (
+                    <pre className={`text-sm text-gray-800 whitespace-pre-wrap ${isCodeSection ? 'font-mono' : ''}`}>
+                      {formatValue(section.toValue, isCodeSection)}
+                    </pre>
+                  )}
                 </div>
               </div>
             </div>
@@ -156,14 +208,28 @@ export default function VersionDiffViewer({
     setError(null);
     
     try {
+      console.log('VersionDiffViewer: Loading version data for comparison:', { fromVersion, toVersion });
+      
       const [fromVersionData, toVersionData] = await Promise.all([
         getVersionData(fromVersion),
         getVersionData(toVersion)
       ]);
       
+      console.log('VersionDiffViewer: Loaded version data:', { 
+        fromVersionData, 
+        toVersionData,
+        fromKeys: Object.keys(fromVersionData || {}),
+        toKeys: Object.keys(toVersionData || {})
+      });
+      
       setFromData(fromVersionData);
       setToData(toVersionData);
+      
+      // Auto-expansion logic removed since PLC code section is no longer shown
+      // Previously auto-expanded PLC code section if it had changes
+      console.log('VersionDiffViewer: Version data loaded successfully');
     } catch (err: any) {
+      console.error('VersionDiffViewer: Error loading version data:', err);
       setError(err.message || 'Failed to load version data');
     } finally {
       setIsLoading(false);
@@ -183,81 +249,98 @@ export default function VersionDiffViewer({
   const createDiffSections = (): DiffSection[] => {
     if (!fromData || !toData) return [];
 
+    console.log('VersionDiffViewer: Creating diff sections with data:', { fromData, toData });
+
     const sections: DiffSection[] = [];
+    let aiPromptSection: DiffSection | undefined;
 
     // Module-specific sections
-    if (fromData.module === 'LogicStudio' || toData.module === 'LogicStudio') {
-      // PLC Code Section
-      sections.push({
-        key: 'editorCode',
-        label: 'PLC Code',
-        icon: Code,
-        fromValue: fromData.editorCode || '',
-        toValue: toData.editorCode || '',
-        hasChanges: (fromData.editorCode || '') !== (toData.editorCode || '')
-      });
+    if (fromData.module === 'LogicStudio' || toData.module === 'LogicStudio' || 
+        fromData.state?.module === 'LogicStudio' || toData.state?.module === 'LogicStudio' ||
+        fromData.moduleStates?.LogicStudio || toData.moduleStates?.LogicStudio ||
+        fromData.logicStudioCode || toData.logicStudioCode) {
+      
+      // Try multiple possible locations for PLC code
+      const fromCode = fromData.editorCode || fromData.logicStudioCode || 
+                      fromData.state?.editorCode || fromData.moduleStates?.LogicStudio?.editorCode ||
+                      fromData.logic?.code || '';
+      const toCode = toData.editorCode || toData.logicStudioCode || 
+                    toData.state?.editorCode || toData.moduleStates?.LogicStudio?.editorCode ||
+                    toData.logic?.code || '';
+      
+      console.log('VersionDiffViewer: Found PLC code:', { fromCode: fromCode.length, toCode: toCode.length });
+      
+      // PLC Code section - REMOVED per user request
+      // sections.push({
+      //   key: 'editorCode',
+      //   label: 'PLC Code',
+      //   icon: Code,
+      //   fromValue: fromCode,
+      //   toValue: toCode,
+      //   hasChanges: fromCode !== toCode
+      // });
 
-      // AI Prompt Section
-      sections.push({
+      // Store AI Prompt section to add at the end
+      const fromPrompt = fromData.prompt || fromData.ai_prompt || 
+                        fromData.state?.prompt || fromData.moduleStates?.LogicStudio?.prompt ||
+                        fromData.logic?.ai_prompt || '';
+      const toPrompt = toData.prompt || toData.ai_prompt || 
+                      toData.state?.prompt || toData.moduleStates?.LogicStudio?.prompt ||
+                      toData.logic?.ai_prompt || '';
+      
+      aiPromptSection = {
         key: 'prompt',
         label: 'AI Prompt',
         icon: MessageSquare,
-        fromValue: fromData.prompt || '',
-        toValue: toData.prompt || '',
-        hasChanges: (fromData.prompt || '') !== (toData.prompt || '')
-      });
+        fromValue: fromPrompt,
+        toValue: toPrompt,
+        hasChanges: fromPrompt !== toPrompt
+      };
 
-      // PLC Vendor Section
+      // PLC Vendor section - REMOVED per user request
+      // Try multiple possible locations for PLC Vendor
+      // const fromVendor = fromData.vendor || fromData.state?.vendor || 
+      //                   fromData.moduleStates?.LogicStudio?.vendor ||
+      //                   fromData.logic?.vendor || 'siemens';
+      // const toVendor = toData.vendor || toData.state?.vendor || 
+      //                 toData.moduleStates?.LogicStudio?.vendor ||
+      //                 toData.logic?.vendor || 'siemens';
+      // 
+      // sections.push({
+      //   key: 'vendor',
+      //   label: 'PLC Vendor',
+      //   icon: Database,
+      //   fromValue: fromVendor,
+      //   toValue: toVendor,
+      //   hasChanges: fromVendor !== toVendor
+      // });
+
+      // Tags Section - Only show tags information
+      const fromTags = fromData.tags || [];
+      const toTags = toData.tags || [];
+
       sections.push({
-        key: 'vendor',
-        label: 'PLC Vendor',
-        icon: Database,
-        fromValue: fromData.vendor || 'siemens',
-        toValue: toData.vendor || 'siemens',
-        hasChanges: (fromData.vendor || 'siemens') !== (toData.vendor || 'siemens')
+        key: 'tags',
+        label: 'Tags',
+        icon: FileText,
+        fromValue: fromTags,
+        toValue: toTags,
+        hasChanges: JSON.stringify(fromTags) !== JSON.stringify(toTags)
       });
 
-      // Logic Studio Metadata Section
+      // Metadata Section - Show only tags as JSON
       const fromMetadata = {
-        projectName: fromData.projectName || '',
-        clientName: fromData.clientName || '',
-        projectType: fromData.projectType || '',
-        description: fromData.description || '',
-        lastActivity: fromData.lastActivity || '',
-        module: fromData.module || '',
-        totalLines: fromData.editorCode ? fromData.editorCode.split('\n').length : 0,
-        promptLength: fromData.prompt ? fromData.prompt.length : 0,
-        timestamp: fromData.timestamp || '',
-        collapseLevel: fromData.collapseLevel || 0,
-        editorSettings: fromData.editorSettings || {},
-        tags: fromData.tags || [],
-        hasPrompt: !!(fromData.prompt && fromData.prompt.trim()),
-        hasCode: !!(fromData.editorCode && fromData.editorCode.trim()),
-        codeComplexity: fromData.editorCode ? (fromData.editorCode.match(/\n/g) || []).length : 0
+        tags: fromData.tags || []
       };
 
       const toMetadata = {
-        projectName: toData.projectName || '',
-        clientName: toData.clientName || '',
-        projectType: toData.projectType || '',
-        description: toData.description || '',
-        lastActivity: toData.lastActivity || '',
-        module: toData.module || '',
-        totalLines: toData.editorCode ? toData.editorCode.split('\n').length : 0,
-        promptLength: toData.prompt ? toData.prompt.length : 0,
-        timestamp: toData.timestamp || '',
-        collapseLevel: toData.collapseLevel || 0,
-        editorSettings: toData.editorSettings || {},
-        tags: toData.tags || [],
-        hasPrompt: !!(toData.prompt && toData.prompt.trim()),
-        hasCode: !!(toData.editorCode && toData.editorCode.trim()),
-        codeComplexity: toData.editorCode ? (toData.editorCode.match(/\n/g) || []).length : 0
+        tags: toData.tags || []
       };
 
       sections.push({
-        key: 'logicStudioMetadata',
-        label: 'Logic Studio Metadata',
-        icon: FileText,
+        key: 'metadata',
+        label: 'Metadata',
+        icon: Database,
         fromValue: fromMetadata,
         toValue: toMetadata,
         hasChanges: JSON.stringify(fromMetadata) !== JSON.stringify(toMetadata)
@@ -345,6 +428,11 @@ export default function VersionDiffViewer({
       hasChanges: (fromData.lastActivity || '') !== (toData.lastActivity || '')
     });
 
+    // Add AI Prompt section at the end if it was created
+    if (aiPromptSection) {
+      sections.push(aiPromptSection);
+    }
+
     return sections;
   };
 
@@ -392,6 +480,7 @@ export default function VersionDiffViewer({
                     Changed: {changedSections.map(s => s.label).join(', ')}
                   </p>
                 )}
+                {/* PLC code change warning removed since PLC code section is no longer shown */}
               </div>
             </div>
 
