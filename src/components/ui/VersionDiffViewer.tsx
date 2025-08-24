@@ -190,6 +190,7 @@ export default function VersionDiffViewer({
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [expandedSections, setExpandedSections] = useState<Set<string>>(new Set());
+  const [showChangesOnly, setShowChangesOnly] = useState(false);
 
   const { getVersionData } = useVersionControl({
     projectId,
@@ -469,11 +470,21 @@ export default function VersionDiffViewer({
           <>
             {/* Summary */}
             <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-              <h3 className="font-medium text-blue-900 mb-2">Comparison Summary</h3>
+              <h3 className="font-medium text-blue-900 mb-2">
+                Comparison Summary
+                {showChangesOnly && (
+                  <span className="ml-2 text-xs bg-blue-200 text-blue-800 px-2 py-1 rounded">
+                    Changes Only
+                  </span>
+                )}
+              </h3>
               <div className="text-sm text-blue-700">
                 <p>
                   <strong>{changedSections.length}</strong> section{changedSections.length !== 1 ? 's' : ''} changed
                   out of <strong>{diffSections.length}</strong> total sections
+                  {showChangesOnly && (
+                    <span className="ml-1">(showing {changedSections.length} changed sections)</span>
+                  )}
                 </p>
                 {changedSections.length > 0 && (
                   <p className="mt-1">
@@ -492,6 +503,7 @@ export default function VersionDiffViewer({
                 onClick={() => {
                   const allKeys = new Set(diffSections.map(s => s.key));
                   setExpandedSections(allKeys);
+                  setShowChangesOnly(false);
                 }}
               >
                 Expand All
@@ -499,7 +511,10 @@ export default function VersionDiffViewer({
               <Button
                 size="sm"
                 variant="outline"
-                onClick={() => setExpandedSections(new Set())}
+                onClick={() => {
+                  setExpandedSections(new Set());
+                  setShowChangesOnly(false);
+                }}
               >
                 Collapse All
               </Button>
@@ -509,15 +524,29 @@ export default function VersionDiffViewer({
                 onClick={() => {
                   const changedKeys = new Set(changedSections.map(s => s.key));
                   setExpandedSections(changedKeys);
+                  setShowChangesOnly(true);
                 }}
+                className={showChangesOnly ? "bg-blue-100 border-blue-300" : ""}
               >
                 Show Changes Only
               </Button>
+              {showChangesOnly && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => {
+                    setShowChangesOnly(false);
+                    setExpandedSections(new Set());
+                  }}
+                >
+                  Show All Sections
+                </Button>
+              )}
             </div>
 
             {/* Diff Sections */}
             <div className="space-y-3">
-              {diffSections.map((section) => (
+              {(showChangesOnly ? changedSections : diffSections).map((section) => (
                 <DiffSectionComponent
                   key={section.key}
                   section={section}
