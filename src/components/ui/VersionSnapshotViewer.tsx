@@ -189,20 +189,20 @@ export default function VersionSnapshotViewer({
         });
       }
 
-      // Technical Details
-      sections.push({
-        key: 'technicalDetails',
-        label: 'Technical Details',
-        icon: Database,
-        value: {
-          'PLC Vendor': versionData.vendor,
-          'Code Complexity (Lines)': versionData.editorCode ? versionData.editorCode.split('\n').length : 0,
-          'Prompt Length (Characters)': versionData.prompt ? versionData.prompt.length : 0,
-          'Collapse Level': versionData.collapseLevel || 0,
-          'Timestamp': versionData.timestamp ? new Date(versionData.timestamp).toLocaleString() : 'Unknown',
-          'Editor Settings': versionData.editorSettings || 'Default settings'
-        }
-      });
+      // // Technical Details
+      // sections.push({
+      //   key: 'technicalDetails',
+      //   label: 'Technical Details',
+      //   icon: Database,
+      //   value: {
+      //     'PLC Vendor': versionData.vendor,
+      //     'Code Complexity (Lines)': versionData.editorCode ? versionData.editorCode.split('\n').length : 0,
+      //     'Prompt Length (Characters)': versionData.prompt ? versionData.prompt.length : 0,
+      //     'Collapse Level': versionData.collapseLevel || 0,
+      //     'Timestamp': versionData.timestamp ? new Date(versionData.timestamp).toLocaleString() : 'Unknown',
+      //     'Editor Settings': versionData.editorSettings || 'Default settings'
+      //   }
+      // });
 
       // Tags and Categories
       if (versionData.tags && versionData.tags.length > 0) {

@@ -342,7 +342,7 @@ export default function VersionDiffModal({ version, onClose, onRollback, onExpor
                   )}
 
                   {/* Technical Details */}
-                  {metadataInfo.technicalDetails && (
+                  {/* {metadataInfo.technicalDetails && (
                     <MetadataSection
                       title="Technical Details"
                       icon={Database}
@@ -350,7 +350,7 @@ export default function VersionDiffModal({ version, onClose, onRollback, onExpor
                       isExpanded={expandedSections.has('technicalDetails')}
                       onToggle={() => toggleSection('technicalDetails')}
                     />
-                  )}
+                  )} */}
 
                   {/* Basic Info (fallback for non-Logic Studio data) */}
                   {metadataInfo.basicInfo && !metadataInfo.logicStudioCore && (
