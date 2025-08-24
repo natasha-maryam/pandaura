@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react';
 import { useParams } from 'react-router-dom';
 import { useTagSync, TagSyncResponse } from '../hooks/useTagSync';
+import config from '../config/environment';
 
 export interface ProjectSyncContextType {
   // Current project ID (from URL or localStorage)
@@ -148,7 +149,7 @@ export function ProjectSyncProvider({ children }: ProjectSyncProviderProps) {
 
       // Make API call to get existing tags using the correct endpoint
       // Note: Using cookies for authentication (consistent with other API calls)
-      const apiUrl = `/api/v1/tags?projectId=${currentProjectId}&pageSize=1000`;
+      const apiUrl = `${config.apiBaseUrl}/api/v1/tags?projectId=${currentProjectId}&pageSize=1000`;
       console.log(`📂 ProjectSyncContext: Making API call to:`, apiUrl);
 
       const response = await fetch(apiUrl, {

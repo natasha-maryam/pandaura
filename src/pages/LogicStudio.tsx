@@ -1,12 +1,9 @@
-import React, { useState, useEffect, useRef, useCallback, useMemo } from "react";
+import React, { useState, useEffect, useRef, useCallback } from "react";
 import STEditor from "../pages/STEditor/STEditor";
 import AIActionButtons from "../pages/AIActionButtons";
 import AISuggestedAutocomplete from "../pages/AISuggestedAutocomplete";
 import PendingChangesPanel from "../pages/STEditor/PendingChangesPanel";
 import RoutineSearchbar from "../pages/STEditor/RoutineSearchbar";
-import AutoFixTooltip from "../pages/STEditor/AutoFixTooltip";
-import RefactorSuggestionBanner from "../pages/STEditor/RefactorSuggestionBanner";
-import SmartEditToolbar from "../pages/STEditor/SmartEditToolbar";
 import { useModuleState } from "../contexts/ModuleStateContext";
 import { useTagSyncOnly, useProjectSyncSafe } from "../contexts/ProjectSyncContext";
 import { useProjectAutosave } from "../components/projects/hooks";

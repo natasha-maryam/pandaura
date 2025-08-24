@@ -417,7 +417,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       <div className="flex flex-col items-center justify-center min-h-screen bg-surface">
         <div className="bg-white border border-error/30 rounded-lg shadow-lg p-8 max-w-md text-center">
           <h2 className="text-2xl font-bold text-error mb-4">Session Expired</h2>
-          <p className="text-muted mb-6">For security purposes, you must log in again. Your session has expired after {SESSION_EXPIRY_HOURS} hours.</p>
+          <p className="text-muted mb-6">For security purposes, you must log in once every {SESSION_EXPIRY_HOURS} hours.</p>
           <a href="/signin" className="inline-block px-6 py-2 bg-primary text-white rounded hover:bg-secondary transition-colors font-semibold">Go to Login</a>
         </div>
       </div>
