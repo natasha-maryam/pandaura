@@ -148,14 +148,29 @@ export function ProjectSyncProvider({ children }: ProjectSyncProviderProps) {
       console.log(`📂 ProjectSyncContext: Current URL:`, window.location.href);
 
       // Make API call to get existing tags using the correct endpoint
-      // Note: Using cookies for authentication (consistent with other API calls)
+      // Send Authorization header with Bearer token from cookies
       const apiUrl = `${config.apiBaseUrl}/api/v1/tags?projectId=${currentProjectId}&pageSize=1000`;
       console.log(`📂 ProjectSyncContext: Making API call to:`, apiUrl);
 
+      // Get token from cookies
+      let token = null;
+      try {
+        // Dynamically import authStorage to avoid circular deps
+        const { authStorage } = await import('../utils/authStorage');
+        token = authStorage.getToken();
+      } catch (err) {
+        console.error('📂 ProjectSyncContext: Failed to get token from cookies', err);
+      }
+
+      const headers: Record<string, string> = {
+        'Content-Type': 'application/json'
+      };
+      if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
+      }
+
       const response = await fetch(apiUrl, {
-        headers: {
-          'Content-Type': 'application/json'
-        },
+        headers,
         credentials: 'include' // This will include cookies for authentication
       });
 
