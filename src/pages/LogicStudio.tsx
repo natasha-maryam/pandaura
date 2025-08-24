@@ -149,7 +149,7 @@ export default function LogicStudio({ sessionMode = false }: LogicStudioProps) {
 
   const [editorCode, setEditorCode] = useState(moduleState.editorCode || emptyProgramCode);
   
-  const [vendor, setVendor] = useState((moduleState.vendor as "Rockwell" | "Siemens" | "Beckhoff"));
+  const [vendor, setVendor] = useState((moduleState.vendor as "Rockwell" | "Siemens" | "Beckhoff") || "Siemens");
   const [showVendorDropdown, setShowVendorDropdown] = useState(false);
   const [showPendingChanges, setShowPendingChanges] = useState(moduleState.showPendingChanges || false);
   const [showAISuggestions, setShowAISuggestions] = useState(moduleState.showAISuggestions !== undefined ? moduleState.showAISuggestions : true);
@@ -252,7 +252,6 @@ export default function LogicStudio({ sessionMode = false }: LogicStudioProps) {
     module: 'LogicStudio',
     prompt,
     editorCode,
-    vendor,
     showPendingChanges,
     showAISuggestions,
     vendorContextEnabled,
@@ -274,7 +273,6 @@ export default function LogicStudio({ sessionMode = false }: LogicStudioProps) {
         module: 'LogicStudio',
         prompt,
         editorCode,
-        vendor,
         showPendingChanges,
         showAISuggestions,
         vendorContextEnabled,
@@ -283,7 +281,7 @@ export default function LogicStudio({ sessionMode = false }: LogicStudioProps) {
         lastActivity: new Date().toISOString()
       });
     }
-  }, [sessionMode, projectId, updateProjectState, prompt, editorCode, vendor, showPendingChanges, showAISuggestions, vendorContextEnabled, isCollapsed, collapseLevel]);
+  }, [sessionMode, projectId, updateProjectState, prompt, editorCode, showPendingChanges, showAISuggestions, vendorContextEnabled, isCollapsed, collapseLevel]);
 
   // Version control for rollback functionality
   const { getVersionData } = useVersionControl({
@@ -312,7 +310,6 @@ export default function LogicStudio({ sessionMode = false }: LogicStudioProps) {
               // Restore Logic Studio state from the enhanced snapshot
               setPrompt(autosaveState.prompt || '');
               setEditorCode(autosaveState.editorCode || '');
-              setVendor(autosaveState.vendor || 'siemens');
               setShowPendingChanges(autosaveState.showPendingChanges || false);
               setShowAISuggestions(autosaveState.showAISuggestions || false);
               setVendorContextEnabled(autosaveState.vendorContextEnabled || false);
@@ -329,7 +326,6 @@ export default function LogicStudio({ sessionMode = false }: LogicStudioProps) {
             
             setPrompt(moduleState.prompt || '');
             setEditorCode(moduleState.editorCode || '');
-            setVendor(moduleState.vendor || 'siemens');
             setShowPendingChanges(moduleState.showPendingChanges || false);
             setShowAISuggestions(moduleState.showAISuggestions || false);
             setVendorContextEnabled(moduleState.vendorContextEnabled || false);
@@ -347,7 +343,6 @@ export default function LogicStudio({ sessionMode = false }: LogicStudioProps) {
             if (versionData && versionData.module === 'LogicStudio') {
               setPrompt(versionData.prompt || '');
               setEditorCode(versionData.editorCode || '');
-              setVendor(versionData.vendor || 'siemens');
               setShowPendingChanges(versionData.showPendingChanges || false);
               setShowAISuggestions(versionData.showAISuggestions || false);
               setVendorContextEnabled(versionData.vendorContextEnabled || false);
@@ -437,7 +432,6 @@ export default function LogicStudio({ sessionMode = false }: LogicStudioProps) {
             saveModuleState('LogicStudio', {
               prompt,
               editorCode,
-              vendor,
               showPendingChanges,
               showAISuggestions,
               vendorContextEnabled,
@@ -448,7 +442,7 @@ export default function LogicStudio({ sessionMode = false }: LogicStudioProps) {
         }
       };
     })(),
-    [sessionMode, saveModuleState, prompt, editorCode, vendor, showPendingChanges, showAISuggestions, vendorContextEnabled, isCollapsed, collapseLevel]
+    [sessionMode, saveModuleState, prompt, editorCode, showPendingChanges, showAISuggestions, vendorContextEnabled, isCollapsed, collapseLevel]
   );
 
   // Track last synced code to prevent unnecessary syncs
@@ -589,7 +583,6 @@ export default function LogicStudio({ sessionMode = false }: LogicStudioProps) {
                 module: 'LogicStudio',
                 prompt,
                 editorCode,
-                vendor,
                 showPendingChanges,
                 showAISuggestions,
                 vendorContextEnabled,

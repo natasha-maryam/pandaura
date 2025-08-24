@@ -48,6 +48,38 @@ export interface ProjectVersion {
   data?: any; // The actual Logic Studio state from the database
 }
 
+// Logic Studio Types
+export interface LogicStudio {
+  id?: number;
+  project_id: number;
+  user_id?: string;
+  code: string;
+  ai_prompt?: string;
+  version_id?: number;
+  ui_state?: {
+    showPendingChanges?: boolean;
+    showAISuggestions?: boolean;
+    vendorContextEnabled?: boolean;
+    isCollapsed?: boolean;
+    collapseLevel?: number;
+  };
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface UpdateLogicStudioData {
+  code?: string;
+  ai_prompt?: string;
+  vendor?: 'siemens' | 'rockwell' | 'beckhoff';
+  ui_state?: {
+    showPendingChanges?: boolean;
+    showAISuggestions?: boolean;
+    vendorContextEnabled?: boolean;
+    isCollapsed?: boolean;
+    collapseLevel?: number;
+  };
+}
+
 export interface CreateVersionData {
   state: any;
   message?: string;
@@ -470,6 +502,84 @@ export class ProjectsAPI {
 
       if (!response.data.success) {
         throw new Error('Failed to delete version');
+      }
+    } catch (error: any) {
+      if (error.response?.data?.error) {
+        throw new Error(error.response.data.error);
+      }
+      throw error;
+    }
+  }
+
+  // === Logic Studio API Methods ===
+
+  /**
+   * Get Logic Studio state for a project
+   */
+  static async getLogicStudio(projectId: number): Promise<LogicStudio> {
+    try {
+      const response = await api.get<{ success: boolean; data: LogicStudio }>(`/projects/${projectId}/logic-studio`);
+
+      if (!response.data.success) {
+        throw new Error('Failed to get Logic Studio state');
+      }
+
+      return response.data.data;
+    } catch (error: any) {
+      if (error.response?.data?.error) {
+        throw new Error(error.response.data.error);
+      }
+      throw error;
+    }
+  }
+
+  /**
+   * Update Logic Studio state
+   */
+  static async updateLogicStudio(projectId: number, data: UpdateLogicStudioData): Promise<LogicStudio> {
+    try {
+      const response = await api.post<{ success: boolean; data: LogicStudio }>(`/projects/${projectId}/logic-studio`, data);
+
+      if (!response.data.success) {
+        throw new Error('Failed to update Logic Studio state');
+      }
+
+      return response.data.data;
+    } catch (error: any) {
+      if (error.response?.data?.error) {
+        throw new Error(error.response.data.error);
+      }
+      throw error;
+    }
+  }
+
+  /**
+   * Update just the Logic Studio code (optimized for frequent updates)
+   */
+  static async updateLogicStudioCode(projectId: number, code: string): Promise<void> {
+    try {
+      const response = await api.put<{ success: boolean }>(`/projects/${projectId}/logic-studio/code`, { code });
+
+      if (!response.data.success) {
+        throw new Error('Failed to update Logic Studio code');
+      }
+    } catch (error: any) {
+      if (error.response?.data?.error) {
+        throw new Error(error.response.data.error);
+      }
+      throw error;
+    }
+  }
+
+  /**
+   * Delete Logic Studio state
+   */
+  static async deleteLogicStudio(projectId: number): Promise<void> {
+    try {
+      const response = await api.delete<{ success: boolean }>(`/projects/${projectId}/logic-studio`);
+
+      if (!response.data.success) {
+        throw new Error('Failed to delete Logic Studio state');
       }
     } catch (error: any) {
       if (error.response?.data?.error) {

@@ -53,9 +53,6 @@ function SaveVersionModal({ isOpen, onClose, onSave, isSaving }: SaveVersionModa
             rows={3}
             disabled={isSaving}
           />
-          <p className="text-xs text-gray-500 mt-1">
-            Press Ctrl+Enter to save quickly
-          </p>
         </div>
         
         <div className="flex justify-end gap-2">

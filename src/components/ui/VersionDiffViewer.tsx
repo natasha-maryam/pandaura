@@ -278,15 +278,6 @@ export default function VersionDiffViewer({
         description: toData.description || ''
       };
 
-      sections.push({
-        key: 'projectInfo',
-        label: 'Project Information',
-        icon: FileText,
-        fromValue: fromProjectInfo,
-        toValue: toProjectInfo,
-        hasChanges: JSON.stringify(fromProjectInfo) !== JSON.stringify(toProjectInfo)
-      });
-
       // Editor Settings Section
       if (fromData.editorSettings || toData.editorSettings) {
         sections.push({

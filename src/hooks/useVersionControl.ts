@@ -94,15 +94,7 @@ export function useVersionControl({
       const versionNumber = await ProjectsAPI.createVersion(projectId, versionData);
       
       console.log('useVersionControl: Version created successfully:', versionNumber);
-      
-      // Show success toast
-      showToast({
-        variant: 'success',
-        title: 'Version Saved',
-        message: `Version ${versionNumber} saved successfully`,
-        duration: 3000
-      });
-      
+
       // Refresh version history
       await refreshVersions();
       

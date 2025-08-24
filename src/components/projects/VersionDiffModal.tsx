@@ -319,29 +319,6 @@ export default function VersionDiffModal({ version, onClose, onRollback, onExpor
                 </div>
               ) : (
                 <>
-                  {/* Logic Studio Core Data */}
-                  {metadataInfo.logicStudioCore && (
-                    <MetadataSection
-                      title="🎯 Logic Studio Core Data"
-                      icon={Code}
-                      data={metadataInfo.logicStudioCore}
-                      isExpanded={expandedSections.has('logicStudioCore')}
-                      onToggle={() => toggleSection('logicStudioCore')}
-                      important={true}
-                    />
-                  )}
-
-                  {/* Project Information */}
-                  {metadataInfo.projectInfo && (
-                    <MetadataSection
-                      title="Project Information"
-                      icon={FileText}
-                      data={metadataInfo.projectInfo}
-                      isExpanded={expandedSections.has('projectInfo')}
-                      onToggle={() => toggleSection('projectInfo')}
-                    />
-                  )}
-
                   {/* PLC Code Content */}
                   {metadataInfo.codeContent && (
                     <MetadataSection
@@ -418,7 +395,7 @@ export default function VersionDiffModal({ version, onClose, onRollback, onExpor
 
             <div className="bg-blue-50 border border-blue-200 rounded-md p-3">
               <p className="text-sm text-blue-800">
-                <strong>Note:</strong> This system stores complete project state snapshots. 
+                <strong>Note:</strong> We stores complete project state snapshots. 
                 Rolling back will restore the entire project to this version's state.
               </p>
             </div>

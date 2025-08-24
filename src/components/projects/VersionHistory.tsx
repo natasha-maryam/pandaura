@@ -3,6 +3,7 @@ import { History, ChevronDown, ChevronUp, Eye, RotateCcw, Clock, RefreshCw, Aler
 import { Button, Card } from '../ui';
 import { ProjectVersion } from '../projects/api';
 import VersionDiffViewer from '../ui/VersionDiffViewer';
+import DeleteVersionModal from './DeleteVersionModal';
 
 interface VersionHistoryProps {
   versions: ProjectVersion[];
@@ -30,6 +31,7 @@ export default function VersionHistory({
   const versionsPerPage = 5;
   const [diffViewerOpen, setDiffViewerOpen] = useState(false);
   const [selectedVersions, setSelectedVersions] = useState<{ from: number; to: number } | null>(null);
+  const [versionToDelete, setVersionToDelete] = useState<ProjectVersion | null>(null);
 
   // Sort versions by version_number descending (newest first)
   const sortedVersions = [...versions].sort((a, b) => b.version_number - a.version_number);
@@ -42,6 +44,20 @@ export default function VersionHistory({
 
   const handlePageChange = (page: number) => {
     setCurrentPage(page);
+  };
+
+  const handleDeleteVersion = (version: ProjectVersion) => {
+    setVersionToDelete(version);
+  };
+
+  const handleConfirmDelete = (version: ProjectVersion) => {
+    if (onDelete) {
+      onDelete(version);
+    }
+  };
+
+  const handleCloseDeleteModal = () => {
+    setVersionToDelete(null);
   };
 
   const formatTimestamp = (timestamp: string) => {
@@ -215,11 +231,7 @@ export default function VersionHistory({
                                 size="sm"
                                 variant="ghost"
                                 icon={Trash2}
-                                onClick={() => {
-                                  if (window.confirm(`Are you sure you want to delete version ${version.version_number}? This action cannot be undone.`)) {
-                                    onDelete(version);
-                                  }
-                                }}
+                                onClick={() => handleDeleteVersion(version)}
                                 className="text-red-600 hover:text-red-700 hover:bg-red-50"
                                 title="Delete this version"
                               >
@@ -289,6 +301,17 @@ export default function VersionHistory({
             setDiffViewerOpen(false);
             setSelectedVersions(null);
           }}
+        />
+      )}
+
+      {/* Delete Version Modal */}
+      {projectId && (
+        <DeleteVersionModal
+          version={versionToDelete}
+          projectId={projectId}
+          onClose={handleCloseDeleteModal}
+          onConfirm={handleConfirmDelete}
+          onSuccess={onRefresh}
         />
       )}
     </Card>

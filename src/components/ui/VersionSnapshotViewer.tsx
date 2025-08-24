@@ -114,7 +114,7 @@ export default function VersionSnapshotViewer({
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [expandedSections, setExpandedSections] = useState<Set<string>>(new Set(['logicStudioCore']));
-  
+
   const { getVersionData } = useVersionControl({ projectId });
 
   useEffect(() => {
@@ -189,28 +189,13 @@ export default function VersionSnapshotViewer({
         });
       }
 
-      // Project Metadata
-      sections.push({
-        key: 'projectMetadata',
-        label: 'Project Information',
-        icon: FileText,
-        value: {
-          'Project Name': versionData.projectName || 'Unnamed Project',
-          'Client Name': versionData.clientName || 'No client specified',
-          'Project Type': versionData.projectType || 'Not specified',
-          'Description': versionData.description || 'No description',
-          'Module': versionData.module,
-          'Last Activity': versionData.lastActivity || 'Unknown'
-        }
-      });
-
       // Technical Details
       sections.push({
         key: 'technicalDetails',
         label: 'Technical Details',
         icon: Database,
         value: {
-          'PLC Vendor': versionData.vendor || 'siemens',
+          'PLC Vendor': versionData.vendor,
           'Code Complexity (Lines)': versionData.editorCode ? versionData.editorCode.split('\n').length : 0,
           'Prompt Length (Characters)': versionData.prompt ? versionData.prompt.length : 0,
           'Collapse Level': versionData.collapseLevel || 0,
