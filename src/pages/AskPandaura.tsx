@@ -15,6 +15,7 @@ import { useModuleState } from "../contexts/ModuleStateContext";
 import { useNavigate, useParams } from "react-router-dom";
 import { useProjectAutosave } from "../components/projects/hooks";
 import AutosaveStatus from "../components/ui/AutosaveStatus";
+import TypingIndicator from "../components/ui/TypingIndicator";
 import { aiService } from "../services/aiService";
 import { AIMessage, Conversation, AIResponse } from "../types/ai";
 
@@ -320,7 +321,7 @@ export default function AskPandaura({ sessionMode = false }: AskPandauraProps) {
         {/* Chat Messages or Welcome Screen */}
         {currentConversation && currentConversation.messages.length > 0 ? (
           <div className="space-y-6 mt-8 scrollable-container optimized-text max-w-6xl mx-auto">
-            {currentConversation.messages.map((message) => (
+            {currentConversation.messages.map((message: any) => (
               <div key={message.id} className={`px-4 py-3 text-sm ${message.role === 'assistant' ? 'bg-gray-50' : ''}`}>
                 <div className="flex items-start gap-3 mb-2">
                   <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-medium ${
@@ -328,22 +329,19 @@ export default function AskPandaura({ sessionMode = false }: AskPandauraProps) {
                       ? 'bg-gray-300 text-gray-700' 
                       : 'bg-primary text-white'
                   }`}>
-                    {message.role === 'user' ? 'You' : 'P'}
+                    {message.role === 'user' ? (
+                      'You'
+                    ) : (
+                      <img 
+                        src={pandauraLogo} 
+                        alt="Pandaura" 
+                        className="w-5 h-5 rounded-full object-cover"
+                      />
+                    )}
                   </div>
                   <div className="flex-1">
                     <div className="text-gray-800 prose prose-sm max-w-none">
-                      <ReactMarkdown
-                        components={{
-                          h1: ({children}) => <div className="text-base font-semibold text-gray-800 mb-2">{children}</div>,
-                          h2: ({children}) => <div className="text-base font-semibold text-gray-800 mb-2">{children}</div>,
-                          h3: ({children}) => <div className="text-base font-medium text-gray-800 mb-1">{children}</div>,
-                          h4: ({children}) => <div className="text-sm font-medium text-gray-700 mb-1">{children}</div>,
-                          h5: ({children}) => <div className="text-sm font-medium text-gray-700 mb-1">{children}</div>,
-                          h6: ({children}) => <div className="text-sm font-medium text-gray-700 mb-1">{children}</div>,
-                        }}
-                      >
-                        {message.content}
-                      </ReactMarkdown>
+                      <ReactMarkdown>{message.content}</ReactMarkdown>
                     </div>
                     
                     {/* Render artifacts if present */}
@@ -381,20 +379,24 @@ export default function AskPandaura({ sessionMode = false }: AskPandauraProps) {
               </div>
             ))}
             
-            {/* Loading indicator */}
+            {/* Loading indicator with typing dots */}
             {isLoading && (
               <div className="px-4 py-3 text-sm bg-gray-50">
                 <div className="flex items-start gap-3 mb-2">
                   <div className="w-8 h-8 bg-primary rounded-full flex items-center justify-center text-xs font-medium text-white">
-                    P
+                    <img 
+                      src={pandauraLogo} 
+                      alt="Pandaura" 
+                      className="w-5 h-5 rounded-full object-cover"
+                    />
                   </div>
                   <div className="flex-1">
-                    <div className="flex items-center gap-2 text-gray-600">
-                      <Loader2 className="w-4 h-4 animate-spin" />
-                      Analyzing your request... (This may take up to 30 seconds)
+                    <div className="flex items-center gap-3 text-gray-600">
+                      <TypingIndicator />
+                      <span className="text-xs">Thinking...</span>
                     </div>
                     <div className="text-xs text-gray-500 mt-1">
-                      💡 Tip: Try shorter, more specific questions for faster responses
+                      💡 Complex automation tasks may take a moment to process
                     </div>
                   </div>
                 </div>

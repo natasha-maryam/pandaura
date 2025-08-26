@@ -1,5 +1,7 @@
 import React, { useState, useRef, useEffect } from "react";
 import { Bot, X, Send, Minimize2, Maximize2 } from "lucide-react";
+import TypingIndicator from "./ui/TypingIndicator";
+import pandauraLogo from "../assets/logo.png";
 
 interface Message {
   id: string;
@@ -12,6 +14,7 @@ export default function PandauraOrb() {
   const [isOpen, setIsOpen] = useState(false);
   const [isMinimized, setIsMinimized] = useState(false);
   const [message, setMessage] = useState("");
+  const [isTyping, setIsTyping] = useState(false);
   const [messages, setMessages] = useState<Message[]>([
     {
       id: '1',
@@ -63,9 +66,11 @@ export default function PandauraOrb() {
 
     setMessages(prev => [...prev, userMessage]);
     setMessage("");
+    setIsTyping(true);
 
-    // Simulate AI response
+    // Simulate AI response with typing indicator
     setTimeout(() => {
+      setIsTyping(false);
       const responses = [
         "I understand you're working on that. Let me help you with the PLC logic structure. Would you like me to explain the safety interlocks?",
         "That's a great question about motor control. In industrial automation, we typically use three-wire control circuits for safety. Let me walk you through it.",
@@ -84,7 +89,7 @@ export default function PandauraOrb() {
       };
 
       setMessages(prev => [...prev, aiMessage]);
-    }, 1000);
+    }, 2000);
   };
 
   const handleKeyPress = (e: React.KeyboardEvent) => {
@@ -159,6 +164,21 @@ export default function PandauraOrb() {
                     </div>
                   </div>
                 ))}
+                
+                {/* Typing indicator */}
+                {isTyping && (
+                  <div className="flex justify-start">
+                    <div className="bg-gray-100 text-primary rounded-lg p-2 text-sm flex items-center gap-2">
+                      <img 
+                        src={pandauraLogo} 
+                        alt="Pandaura" 
+                        className="w-4 h-4 rounded-full object-cover"
+                      />
+                      <TypingIndicator />
+                    </div>
+                  </div>
+                )}
+                
                 <div ref={messagesEndRef} />
               </div>
 
