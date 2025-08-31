@@ -35,6 +35,54 @@ export interface WrapperARequest {
   prompt: string;
   projectId?: string;
   vendor_selection?: VendorType;
+  sessionId?: string;
+  stream?: boolean;
+}
+
+// Health check response
+export interface HealthResponse {
+  status: string;
+  model_name: string;
+  memory_sessions: number;
+  image_support?: boolean;
+  vision_model?: string;
+  document_support?: boolean;
+  supported_formats?: string[];
+}
+
+// Streaming response types
+export interface StreamChunk {
+  type: 'chunk' | 'end' | 'error' | 'complete';
+  content?: string;
+  fullResponse?: string | WrapperAResponse;
+  answer?: string;
+  error?: string;
+}
+
+// Document upload types
+export interface DocumentUploadRequest {
+  prompt: string;
+  projectId?: string;
+  sessionId?: string;
+  files: File[];
+}
+
+export interface DocumentAnalysisResponse extends WrapperAResponse {
+  document_count?: number;
+  processed_documents?: string[];
+}
+
+// Image upload types
+export interface ImageUploadRequest {
+  prompt: string;
+  projectId?: string;
+  sessionId?: string;
+  images: File[];
+}
+
+export interface ImageAnalysisResponse extends WrapperAResponse {
+  image_count?: number;
+  processed_images?: string[];
 }
 
 // Chat and conversation types

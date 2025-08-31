@@ -1,4 +1,13 @@
-import { WrapperARequest, WrapperAResponse } from '../types/ai';
+import { 
+  WrapperARequest, 
+  WrapperAResponse, 
+  HealthResponse, 
+  StreamChunk, 
+  DocumentUploadRequest, 
+  DocumentAnalysisResponse,
+  ImageUploadRequest,
+  ImageAnalysisResponse 
+} from '../types/ai';
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000';
 
@@ -25,8 +34,13 @@ export class AIService {
     return response.json();
   }
 
-  public async checkHealth(): Promise<{ status: string; model_name: string }> {
+  public async checkHealth(): Promise<HealthResponse> {
     const response = await fetch(`${this.baseUrl}/health`);
+    return this.handleResponse(response);
+  }
+
+  public async ping(): Promise<{ status: string; response_time: number; model_name: string }> {
+    const response = await fetch(`${this.baseUrl}/health/ping`);
     return this.handleResponse(response);
   }
 
@@ -37,13 +51,9 @@ export class AIService {
     return this.handleResponse(response);
   }
 
-  public async queryWrapperA(request: WrapperARequest): Promise<WrapperAResponse> {
-    const response = await fetch(`${this.baseUrl}/wrapperA`, {
+  public async testConnection(): Promise<{ status: string; message: string }> {
+    const response = await fetch(`${this.baseUrl}/test`, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(request),
     });
     return this.handleResponse(response);
   }
@@ -59,7 +69,22 @@ export class AIService {
     return this.handleResponse(response);
   }
 
+  public async clearMemory(sessionId: string): Promise<{ status: string; message: string }> {
+    const response = await fetch(`${this.baseUrl}/clear-memory`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ sessionId }),
+    });
+    return this.handleResponse(response);
+  }
+
   public async sendMessage(request: WrapperARequest): Promise<WrapperAResponse> {
+    if (request.stream) {
+      throw new Error('Use sendStreamingMessage for streaming requests');
+    }
+
     const response = await fetch(`${this.baseUrl}/wrapperA`, {
       method: 'POST',
       headers: {
@@ -67,6 +92,154 @@ export class AIService {
       },
       body: JSON.stringify(request),
     });
+    return this.handleResponse(response);
+  }
+
+  public async sendStreamingMessage(
+    request: WrapperARequest,
+    onChunk: (chunk: StreamChunk) => void
+  ): Promise<string> {
+    const response = await fetch(`${this.baseUrl}/wrapperA`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Accept': 'text/event-stream',
+        'Cache-Control': 'no-cache',
+      },
+      body: JSON.stringify({ ...request, stream: true }),
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorData.error || `HTTP error! status: ${response.status}`);
+    }
+
+    const reader = response.body?.getReader();
+    if (!reader) {
+      throw new Error('Response body is not readable');
+    }
+
+    const decoder = new TextDecoder();
+    let fullResponse = '';
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+
+      const chunk = decoder.decode(value);
+      const lines = chunk.split('\n');
+
+      for (const line of lines) {
+        if (line.startsWith('data: ')) {
+          try {
+            const data: StreamChunk = JSON.parse(line.slice(6));
+            onChunk(data);
+            
+            if (data.type === 'chunk' && data.content) {
+              fullResponse += data.content;
+            } else if (data.type === 'complete' && data.answer) {
+              // Use the complete answer from the parsed response
+              fullResponse = data.answer;
+            } else if (data.type === 'end') {
+              // Streaming completed
+            } else if (data.type === 'error') {
+              throw new Error(data.error || 'Streaming error');
+            }
+          } catch (e) {
+            // Ignore parsing errors for non-JSON lines
+          }
+        }
+      }
+    }
+
+    return fullResponse;
+  }
+
+  public async uploadAndAnalyzeDocuments(request: DocumentUploadRequest): Promise<DocumentAnalysisResponse> {
+    const formData = new FormData();
+    formData.append('prompt', request.prompt);
+    
+    if (request.projectId) {
+      formData.append('projectId', request.projectId);
+    }
+    
+    if (request.sessionId) {
+      formData.append('sessionId', request.sessionId);
+    }
+
+    // Add all files to the FormData
+    request.files.forEach((file) => {
+      formData.append('document', file);
+    });
+
+    const response = await fetch(`${this.baseUrl}/wrapperA`, {
+      method: 'POST',
+      body: formData,
+    });
+
+    return this.handleResponse(response);
+  }
+
+  public async analyzeDocument(file: File, prompt: string): Promise<DocumentAnalysisResponse> {
+    const formData = new FormData();
+    formData.append('document', file);
+    formData.append('prompt', prompt);
+
+    const response = await fetch(`${this.baseUrl}/analyze-document`, {
+      method: 'POST',
+      body: formData,
+    });
+
+    return this.handleResponse(response);
+  }
+
+  public async uploadAndAnalyzeImages(request: ImageUploadRequest): Promise<ImageAnalysisResponse> {
+    const formData = new FormData();
+    formData.append('prompt', request.prompt);
+    
+    if (request.projectId) {
+      formData.append('projectId', request.projectId);
+    }
+    
+    if (request.sessionId) {
+      formData.append('sessionId', request.sessionId);
+    }
+
+    // Add all images to the FormData
+    request.images.forEach((image) => {
+      formData.append('image', image);
+    });
+
+    const response = await fetch(`${this.baseUrl}/wrapperA`, {
+      method: 'POST',
+      body: formData,
+    });
+
+    return this.handleResponse(response);
+  }
+
+  public async analyzeImage(file: File, prompt: string): Promise<ImageAnalysisResponse> {
+    const formData = new FormData();
+    formData.append('image', file);
+    formData.append('prompt', prompt);
+
+    const response = await fetch(`${this.baseUrl}/analyze-image`, {
+      method: 'POST',
+      body: formData,
+    });
+
+    return this.handleResponse(response);
+  }
+
+  public async uploadImage(file: File): Promise<{ status: string; image_url: string; image_info: any }> {
+    const formData = new FormData();
+    formData.append('image', file);
+
+    const response = await fetch(`${this.baseUrl}/upload-image`, {
+      method: 'POST',
+      body: formData,
+    });
+
     return this.handleResponse(response);
   }
 
@@ -105,6 +278,58 @@ export class AIService {
     }
 
     return title;
+  }
+
+  public generateSessionId(): string {
+    return `session_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+  }
+
+  public isFileSupported(file: File): boolean {
+    const supportedTypes = [
+      // Images
+      'image/jpeg',
+      'image/jpg', 
+      'image/png',
+      'image/gif',
+      'image/webp',
+      'image/bmp',
+      'image/tiff',
+      // Documents
+      'application/pdf',
+      'application/msword',
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      'text/plain',
+      'text/csv',
+      'application/vnd.ms-excel',
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      'application/vnd.ms-powerpoint',
+      'application/vnd.openxmlformats-officedocument.presentationml.presentation'
+    ];
+
+    return supportedTypes.includes(file.type);
+  }
+
+  public getFileTypeCategory(file: File): 'image' | 'document' | 'unsupported' {
+    const imageTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp', 'image/bmp', 'image/tiff'];
+    const documentTypes = [
+      'application/pdf',
+      'application/msword',
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      'text/plain',
+      'text/csv',
+      'application/vnd.ms-excel',
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      'application/vnd.ms-powerpoint',
+      'application/vnd.openxmlformats-officedocument.presentationml.presentation'
+    ];
+
+    if (imageTypes.includes(file.type)) {
+      return 'image';
+    } else if (documentTypes.includes(file.type)) {
+      return 'document';
+    } else {
+      return 'unsupported';
+    }
   }
 }
 

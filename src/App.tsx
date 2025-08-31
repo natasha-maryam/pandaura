@@ -23,6 +23,7 @@ import Privacy from "./pages/Privacy";
 import Terms from "./pages/Terms";
 import CaseStudies from "./pages/CaseStudies";
 import ProjectsDebug from "./pages/ProjectsDebug";
+import AITestPage from "./pages/AITestPage";
 import { ModuleStateProvider } from "./contexts/ModuleStateContext";
 import { AuthProvider, useAuth } from "./contexts/AuthContext";
 import { SignUpProvider } from "./contexts/SignUpContext";
@@ -107,6 +108,14 @@ export default function App() {
                   element={
                     <ProtectedRoute>
                       <ProjectsDebug />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/debug/ai"
+                  element={
+                    <ProtectedRoute>
+                      <AITestPage />
                     </ProtectedRoute>
                   }
                 />
