@@ -1,6 +1,6 @@
 import React from 'react';
 import { WrapperAResponse, CodeArtifact } from '../../types/ai';
-import { Card } from './Card';
+import  Card  from './Card';
 import { CodeArtifactViewer } from './CodeArtifactViewer';
 import { TableArtifactViewer } from './TableArtifactViewer';
 import ReactMarkdown from 'react-markdown';
