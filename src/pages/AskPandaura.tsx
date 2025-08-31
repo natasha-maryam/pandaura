@@ -27,7 +27,7 @@ import AutosaveStatus from "../components/ui/AutosaveStatus";
 import TypingIndicator from "../components/ui/TypingIndicator";
 import MemoryManager from "../components/ui/MemoryManager";
 import { aiService } from "../services/aiService";
-import { AIMessage, Conversation, WrapperAResponse, WrapperBResponse, StreamChunk, WrapperType, TaskType } from "../types/ai";
+import { AIMessage, Conversation, WrapperAResponse, WrapperBResponse, WrapperCResponse, WrapperDResponse, StreamChunk, WrapperType, TaskType } from "../types/ai";
 import { CodeArtifactViewer } from "../components/ui/CodeArtifactViewer";
 import { TableArtifactViewer } from "../components/ui/TableArtifactViewer";
 import { parseMarkdownTables, removeMarkdownTables, parseCitations, removeCitations, parseProcessedFiles, removeProcessedFiles } from "../utils/markdownTableParser";
@@ -260,7 +260,7 @@ export default function AskPandaura({ sessionMode = false }: AskPandauraProps) {
       let response: WrapperAResponse | WrapperBResponse;
       let streamingHandled = false;
       
-      if (selectedFiles.length > 0) {
+      if (selectedFiles.length > 0 || (selectedWrapper === 'B' && currentConversation?.uploadedFiles?.length)) {
         setUploadingFiles(true);
         
         if (selectedWrapper === 'B') {
@@ -290,9 +290,18 @@ export default function AskPandaura({ sessionMode = false }: AskPandauraProps) {
               prev.map(conv => conv.id === conversation!.id ? conversationWithStreaming : conv)
             );
             
+            // For follow-up questions, include context about previously uploaded files
+            let contextualPrompt = userMessage;
+            if (selectedFiles.length === 0 && currentConversation?.uploadedFiles?.length) {
+              const fileContext = currentConversation.uploadedFiles.map(f => 
+                `Previously uploaded: ${f.filename} (${f.type})`
+              ).join(', ');
+              contextualPrompt = `${userMessage}\n\n[Context: This question relates to previously uploaded files: ${fileContext}]`;
+            }
+            
             const fullResponse = await aiService.sendWrapperBStreamingMessage(
               {
-                prompt: userMessage,
+                prompt: contextualPrompt,
                 projectId: projectId || undefined,
                 sessionId,
                 files: selectedFiles,
@@ -716,9 +725,24 @@ export default function AskPandaura({ sessionMode = false }: AskPandauraProps) {
           artifacts,
         };
 
-        // For Wrapper B, add processed files to the AI message
+        // For Wrapper B, add processed files to the AI message and conversation
         if (selectedWrapper === 'B' && response.processed_files) {
           aiMessage.processedFiles = response.processed_files;
+          
+          // Store files in conversation for future reference
+          const uploadedFiles = selectedFiles.map(file => ({
+            filename: file.name,
+            type: file.type,
+            size: file.size,
+            uploadedAt: new Date(),
+            processedData: response.processed_files?.find(pf => pf.filename === file.name)
+          }));
+          
+          // Update conversation with uploaded files
+          updatedConversation.uploadedFiles = [
+            ...(updatedConversation.uploadedFiles || []),
+            ...uploadedFiles
+          ];
         }
 
         // Update conversation with AI response
@@ -927,7 +951,7 @@ export default function AskPandaura({ sessionMode = false }: AskPandauraProps) {
           {" "}
           {/* Added bottom padding for fixed input */}
           {/* Header */}
-          <div className="flex items-center justify-between max-w-6xl mx-auto">
+          <div className="flex items-center justify-between max-w-full mx-auto">
             <div className="flex items-center gap-2">
               {/* Session ID display */}
               {/* <div className="text-xs text-gray-500 bg-gray-100 px-2 py-1 rounded">
@@ -983,13 +1007,13 @@ export default function AskPandaura({ sessionMode = false }: AskPandauraProps) {
           </div>
           {/* Error Display */}
           {error && (
-            <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-md max-w-6xl mx-auto">
+            <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-md  mx-auto">
               <p className="text-sm text-red-700">{error}</p>
             </div>
           )}
           {/* Chat Messages or Welcome Screen */}
           {currentConversation && currentConversation.messages.length > 0 ? (
-            <div className="space-y-4 mt-8 mb-8 max-w-6xl mx-auto">
+            <div className="space-y-4 mt-8 mb-8  mx-auto">
               {currentConversation.messages.map((message: any) => (
                 <div key={message.id} className={`px-4 py-2 text-sm `}>
                   <div className="flex gap-2">
@@ -1036,6 +1060,23 @@ export default function AskPandaura({ sessionMode = false }: AskPandauraProps) {
                             <span>Response complete</span>
                           </div>
                         )}
+
+                      {/* Show processed files indicator for document analysis */}
+                      {message.role === "assistant" && message.processedFiles && message.processedFiles.length > 0 && (
+                        <div className="mt-3 p-2 bg-blue-50 border border-blue-200 rounded-md">
+                          <div className="flex items-center gap-2 text-xs text-blue-700 font-medium mb-1">
+                            <FileText className="w-3 h-3" />
+                            Analyzed Files ({message.processedFiles.length})
+                          </div>
+                          <div className="flex flex-wrap gap-1">
+                            {message.processedFiles.map((file: any, idx: number) => (
+                              <span key={idx} className="text-xs bg-blue-100 text-blue-700 px-2 py-1 rounded">
+                                {file.filename}
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+                      )}
 
                       {/* Render artifacts using WrapperAResponseViewer - single source of truth */}
                       {message.role === "assistant" && 
@@ -1120,7 +1161,7 @@ export default function AskPandaura({ sessionMode = false }: AskPandauraProps) {
             </div>
           ) : (
             /* Welcome Screen */
-            <div className="text-muted mt-4 px-6 flex flex-col items-center text-center max-w-6xl mx-auto">
+            <div className="text-muted mt-4 px-6 flex flex-col items-center text-center  mx-auto">
               <img
                 src={logo}
                 alt="Pandaura Logo"
@@ -1144,7 +1185,7 @@ export default function AskPandaura({ sessionMode = false }: AskPandauraProps) {
               )}
 
               {/* Sample questions */}
-              <div className="mt-6 grid grid-cols-1 md:grid-cols-2 gap-3 w-full max-w-4xl">
+              <div className="mt-6 grid grid-cols-1 md:grid-cols-2 gap-3 w-full max-w-7xl">
                 <p className="col-span-full text-xs font-medium text-gray-600 mb-2 text-left">
                   Try asking{" "}
                   {selectedWrapper === "A"
@@ -1187,7 +1228,7 @@ export default function AskPandaura({ sessionMode = false }: AskPandauraProps) {
       >
         {/* Selected Files Indicator */}
         {selectedFiles.length > 0 && (
-          <div className="mb-3 max-w-6xl mx-auto">
+          <div className="mb-3  mx-auto">
             <div
               className={`flex items-center gap-2 rounded-md px-3 py-2 ${
                 selectedWrapper === "A"
@@ -1247,7 +1288,7 @@ export default function AskPandaura({ sessionMode = false }: AskPandauraProps) {
         )}
 
         {/* Wrapper Selection */}
-        <div className="mb-3 max-w-6xl mx-auto">
+        <div className="mb-3  mx-auto">
           <div className="flex items-center gap-4">
             <div className="flex items-center gap-2">
               <label className="text-sm font-medium text-gray-700">
@@ -1286,6 +1327,7 @@ export default function AskPandaura({ sessionMode = false }: AskPandauraProps) {
                     Doc Analyst
                   </div>
                 </button>
+
               </div>
             </div>
 
@@ -1334,11 +1376,44 @@ export default function AskPandaura({ sessionMode = false }: AskPandauraProps) {
                   </ul>
                 </div>
               </div>
+              <div className="mt-4 p-2 bg-blue-50 border border-blue-200 rounded">
+                <h5 className="font-semibold text-blue-700 mb-1 flex items-center gap-1">
+                  <AlertCircle className="w-3 h-3" />
+                  Built-in Quality Assurance
+                </h5>
+                <p className="text-blue-600 text-xs">
+                  Both modes include automatic <strong>self-verification</strong> (checks syntax, logic, and safety) 
+                  and <strong>multi-perspective analysis</strong> (engineering accuracy + communication clarity + practical safety). 
+                  Every response is validated before delivery.
+                </p>
+              </div>
             </div>
           )}
         </div>
 
-        <div className="flex items-end gap-3 max-w-6xl mx-auto">
+        {/* Show uploaded files context for Wrapper B */}
+        {selectedWrapper === 'B' && currentConversation?.uploadedFiles && currentConversation.uploadedFiles.length > 0 && (
+          <div className=" mx-auto mb-3">
+            <div className="bg-green-50 border border-green-200 rounded-md p-2">
+              <div className="flex items-center gap-2 text-xs text-green-700 font-medium mb-1">
+                <FileText className="w-3 h-3" />
+                Available Files for Reference ({currentConversation.uploadedFiles.length})
+              </div>
+              <div className="flex flex-wrap gap-1">
+                {currentConversation.uploadedFiles.map((file: any, idx: number) => (
+                  <span key={idx} className="text-xs bg-green-100 text-green-700 px-2 py-1 rounded">
+                    {file.filename}
+                  </span>
+                ))}
+              </div>
+              <div className="text-xs text-green-600 mt-1">
+                You can ask questions about these files without re-uploading them.
+              </div>
+            </div>
+          </div>
+        )}
+
+        <div className="flex items-end gap-3  mx-auto">
           {/* Wider max width for full use of space */}
           <textarea
             value={chatMessage}

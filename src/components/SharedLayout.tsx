@@ -1,4 +1,5 @@
 import React, { useState, useCallback, useMemo, useEffect, useRef } from "react";
+import { createPortal } from "react-dom";
 import { useNavigate, useLocation, useParams } from "react-router-dom";
 import {
   Menu,
@@ -28,38 +29,39 @@ const tools = [
   // { name: "Projects", path: "/projects", icon: Download },
 ] as const;
 
-const toolDescriptions = {
-  "Pandaura AS": [
-    "Your AI co-engineer for automation, electrical, robotics, and everything in between.",
-  ],
-  "Logic Studio": [
-    "Turn natural language into fully structured PLC code — instantly and vendor-ready.",
-  ],
-  "AutoDocs": [
-    "Auto-generate PLC docs for end-user delivery—specs, IO lists, logic summaries, and more",
-  ],
-  "Tag Database Manager": [
-    "Organize, edit, and maintain all your PLC tags in one centralized system.",
-  ],
-  "Projects": [
-    "Manage and organize your automation projects, files, and collaborative workspaces.",
-  ],
-};
+// const toolDescriptions = {
+//   "Pandaura AS": [
+//     "Your AI co-engineer for automation, electrical, robotics, and everything in between.",
+//   ],
+//   "Logic Studio": [
+//     "Turn natural language into fully structured PLC code — instantly and vendor-ready.",
+//   ],
+//   "AutoDocs": [
+//     "Auto-generate PLC docs for end-user delivery—specs, IO lists, logic summaries, and more",
+//   ],
+//   "Tag Database Manager": [
+//     "Organize, edit, and maintain all your PLC tags in one centralized system.",
+//   ],
+//   "Projects": [
+//     "Manage and organize your automation projects, files, and collaborative workspaces.",
+//   ],
+// };
 
 interface SharedLayoutProps {
   children: React.ReactNode;
 }
 
 export default function SharedLayout({ children }: SharedLayoutProps) {
-  const [sidebarOpen, setSidebarOpen] = useState(true);
+  // Remove sidebarOpen state - sidebar will always be collapsed
   const [showSaveModal, setShowSaveModal] = useState(false);
-  const [profileExpanded, setProfileExpanded] = useState(false);
+  const [profileDropdownVisible, setProfileDropdownVisible] = useState(false);
   const navigate = useNavigate();
   const location = useLocation();
   const { projectId } = useParams<{ projectId: string }>();
   const { saveModuleState } = useModuleState();
   const { logout } = useAuth();
   const containerRef = useRef<HTMLDivElement>(null);
+  const profileRef = useRef<HTMLDivElement>(null);
 
   // Check if we're in a project workspace context
   const isProjectWorkspace = location.pathname.startsWith('/workspace/');
@@ -86,7 +88,7 @@ export default function SharedLayout({ children }: SharedLayoutProps) {
   );
 
   const toggleProfile = () => {
-    setProfileExpanded(!profileExpanded);
+    // Profile dropdown is now handled by hover, no need for toggle
   };
 
   // Listen for unsaved changes from child components
@@ -100,6 +102,114 @@ export default function SharedLayout({ children }: SharedLayoutProps) {
       window.removeEventListener('pandaura:unsaved-changes', handleUnsavedChanges as EventListener);
     };
   }, []);
+
+  // Handle click outside profile dropdown
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      const target = event.target as Node;
+      
+      // Check if click is outside both the profile icon and the dropdown
+      if (profileRef.current && !profileRef.current.contains(target)) {
+        // Also check if the click is not on the dropdown itself
+        const dropdownElement = document.querySelector('[data-profile-dropdown]');
+        if (!dropdownElement || !dropdownElement.contains(target)) {
+          setProfileDropdownVisible(false);
+        }
+      }
+    };
+
+    if (profileDropdownVisible) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [profileDropdownVisible]);
+
+  // Calculate dropdown position
+  const getDropdownPosition = () => {
+    if (!profileRef.current) return { top: 0, left: 0 };
+    
+    const rect = profileRef.current.getBoundingClientRect();
+    return {
+      top: rect.top,
+      left: rect.right + 8, // 8px spacing from the icon
+    };
+  };
+
+  // Profile Dropdown Component
+  const ProfileDropdown = () => {
+    if (!profileDropdownVisible) return null;
+
+    const position = getDropdownPosition();
+    
+    return createPortal(
+      <div 
+        data-profile-dropdown
+        className="fixed w-48 bg-white rounded-lg shadow-xl border border-light z-[9999]"
+        style={{
+          top: position.top,
+          left: position.left,
+        }}
+      >
+        <div className="py-2">
+          <div
+            onClick={() => {
+              console.log("Navigating to profile...");
+              navigate("/profile", { state: { from: location.pathname } });
+              setProfileDropdownVisible(false);
+            }}
+            className="flex items-center gap-2 px-4 py-2 text-sm text-muted hover:text-primary hover:bg-gray-100 cursor-pointer transition-colors"
+          >
+            👤 Profile
+          </div>
+          <div
+            onClick={() => {
+              console.log("Navigating to feedback...");
+              navigate("/feedback");
+              setProfileDropdownVisible(false);
+            }}
+            className="flex items-center gap-2 px-4 py-2 text-sm text-muted hover:text-primary hover:bg-gray-100 cursor-pointer transition-colors"
+          >
+            💬 Feedback
+          </div>
+          <div
+            onClick={() => {
+              console.log("Navigating to privacy...");
+              navigate("/privacy");
+              setProfileDropdownVisible(false);
+            }}
+            className="flex items-center gap-2 px-4 py-2 text-sm text-muted hover:text-primary hover:bg-gray-100 cursor-pointer transition-colors"
+          >
+            🔐 Privacy
+          </div>
+          <div
+            onClick={() => {
+              console.log("Navigating to case study library...");
+              navigate("/case-study-library");
+              setProfileDropdownVisible(false);
+            }}
+            className="flex items-center gap-2 px-4 py-2 text-sm text-muted hover:text-primary hover:bg-gray-100 cursor-pointer transition-colors"
+          >
+            📂 Case Studies
+          </div>
+          <div
+            onClick={() => {
+              logout();
+              navigate("/signin");
+              setProfileDropdownVisible(false);
+            }}
+            className="flex items-center gap-2 px-4 py-2 text-sm text-muted hover:text-primary hover:bg-gray-100 cursor-pointer transition-colors border-t border-light mt-1"
+          >
+            <LogOut className="w-4 h-4" />
+            Log Out
+          </div>
+        </div>
+      </div>,
+      document.body
+    );
+  };
   
   // Get tools with project-specific paths if in project workspace
   const navigationTools = useMemo(() => {
@@ -215,92 +325,37 @@ export default function SharedLayout({ children }: SharedLayoutProps) {
   const renderSidebar = useMemo(() => (
     <div
       ref={containerRef}
-      className={`h-full overflow-y-auto scrollbar-hide bg-gray-light border-r border-light p-2 space-y-4 transition-all duration-200 will-change-transform ${
-        sidebarOpen ? "w-72" : "w-16"
-      }`}
+      className="h-full bg-gray-light border-r border-light p-2 space-y-4 transition-all duration-200 will-change-transform w-16"
       style={{ scrollBehavior: 'smooth' }}
     >
-      <button
-        className="text-secondary mb-2 focus:outline-none hover:text-primary transition-colors"
-        onClick={() => setSidebarOpen(!sidebarOpen)}
-        aria-label="Toggle sidebar"
-        title="Toggle sidebar"
-      >
-        <Menu className="w-8 h-8" />
-      </button>
+      {/* Remove toggle button since sidebar is always collapsed */}
 
       {/* Profile and Integration Icons */}
       <div className="space-y-2 pb-4 border-b border-light/50">
-        {/* Profile Icon */}
-        <div>
+        {/* Profile Icon with click dropdown */}
+        <div 
+          ref={profileRef}
+          className="relative"
+        >
           <div
-            onClick={toggleProfile}
-            className={`flex items-center ${!sidebarOpen ? "justify-center" : ""} cursor-pointer py-3 rounded-md transition-colors duration-150 hover:bg-gray hover:text-primary hover:shadow-sm`}
-            title={sidebarOpen ? "" : "User Profile"}
+            onClick={() => {
+              console.log("Profile icon clicked, current state:", profileDropdownVisible);
+              setProfileDropdownVisible(!profileDropdownVisible);
+            }}
+            className="flex items-center justify-center cursor-pointer py-3 rounded-md transition-colors duration-150 hover:bg-gray hover:text-primary hover:shadow-sm"
+            title="User Profile"
           >
             <User className="w-6 h-6 min-w-[1.5rem] min-h-[1.5rem]" />
-            {sidebarOpen && <span className="text-sm font-medium ml-2">Profile</span>}
           </div>
-          {profileExpanded && sidebarOpen && (
-            <div className="ml-7 mt-1 space-y-1">
-              <div
-                onClick={() => {
-                  console.log("Navigating to profile...");
-                  navigate("/profile", { state: { from: location.pathname } });
-                }}
-                className="flex items-center gap-2 px-3 py-2 text-xs text-muted hover:text-primary hover:bg-gray-100 rounded cursor-pointer transition-colors"
-              >
-                👤 Profile
-              </div>
-              <div
-                onClick={() => {
-                  console.log("Navigating to feedback...");
-                  navigate("/feedback");
-                }}
-                className="flex items-center gap-2 px-3 py-2 text-xs text-muted hover:text-primary hover:bg-gray-100 rounded cursor-pointer transition-colors"
-              >
-                💬 Feedback
-              </div>
-              <div
-                onClick={() => {
-                  console.log("Navigating to privacy...");
-                  navigate("/privacy");
-                }}
-                className="flex items-center gap-2 px-3 py-2 text-xs text-muted hover:text-primary hover:bg-gray-100 rounded cursor-pointer transition-colors"
-              >
-                🔐 Privacy
-              </div>
-              <div
-                onClick={() => {
-                  console.log("Navigating to case study library...");
-                  navigate("/case-study-library");
-                }}
-                className="flex items-center gap-2 px-3 py-2 text-xs text-muted hover:text-primary hover:bg-gray-100 rounded cursor-pointer transition-colors"
-              >
-                📂 Case Studies
-              </div>
-              <div
-                onClick={() => {
-                  logout();
-                  navigate("/signin");
-                }}
-                className="flex items-center gap-2 px-3 py-2 text-xs text-muted hover:text-primary hover:bg-gray-100 rounded cursor-pointer transition-colors"
-              >
-                <LogOut className="w-3 h-3" />
-                Log Out
-              </div>
-            </div>
-          )}
         </div>
 
         {/* Integrations Icon - Commented out for now */}
         {/* <div className="relative">
           <div
-            className={`flex items-center ${!sidebarOpen ? "justify-center" : ""} cursor-pointer py-3 rounded-md transition-colors duration-150 hover:bg-gray hover:text-primary hover:shadow-sm`}
-            title={sidebarOpen ? "" : "Integrations"}
+            className="flex items-center justify-center cursor-pointer py-3 rounded-md transition-colors duration-150 hover:bg-gray hover:text-primary hover:shadow-sm"
+            title="Integrations"
           >
             <Plug className="w-6 h-6 min-w-[1.5rem] min-h-[1.5rem]" />
-            {sidebarOpen && <span className="text-sm font-medium ml-2">Integrations</span>}
           </div>
         </div> */}
       </div>
@@ -313,31 +368,21 @@ export default function SharedLayout({ children }: SharedLayoutProps) {
           <div key={tool.name}>
             <div
               onClick={() => handleToolClick(tool.path)}
-              className={`flex items-center ${!sidebarOpen ? "justify-center" : ""} cursor-pointer py-3 rounded-md transition-colors duration-150 ${
+              className={`flex items-center justify-center cursor-pointer py-3 rounded-md transition-colors duration-150 ${
                 isActive
                   ? " text-primary shadow-sm"
                   : "hover:bg-gray hover:text-primary hover:shadow-sm"
               }`}
-              title={sidebarOpen ? "" : tool.name}
+              title={tool.name} // Always show tooltip since sidebar is collapsed
             >
               <Icon className="w-6 h-6 min-w-[1.5rem] min-h-[1.5rem]" />
-              {sidebarOpen && <span className="text-sm font-medium ml-2">{tool.name}</span>}
             </div>
-            {sidebarOpen && (
-              <div className="ml-7 mt-1 space-y-1 text-xs text-muted">
-                {toolDescriptions[tool.name]?.map((line, idx) => (
-                  <div key={idx} className="flex items-start gap-1">
-                    <span className="text-disabled">→</span>
-                    <span>{line}</span>
-                  </div>
-                ))}
-              </div>
-            )}
+            {/* Remove expanded content since sidebar is always collapsed */}
           </div>
         );
       })}
     </div>
-  ), [sidebarOpen, location.pathname, handleToolClick, profileExpanded, navigate, logout, toggleProfile]);
+  ), [location.pathname, handleToolClick, navigate, logout, profileDropdownVisible]);
 
   const renderSaveModal = () => (
     showSaveModal && (
@@ -382,6 +427,7 @@ export default function SharedLayout({ children }: SharedLayoutProps) {
         <div className="flex-1 overflow-y-auto will-change-scroll" style={{ scrollBehavior: 'smooth' }}>{children}</div>
       </div>
       <PandauraOrb />
+      <ProfileDropdown />
       {renderSaveModal()}
     </div>
   );

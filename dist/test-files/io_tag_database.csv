@@ -1,0 +1,33 @@
+Tag Name,Data Type,Address,Description,Initial Value,Safety Relevant
+Emergency_Stop_1,BOOL,%I0.0,Main emergency stop button,FALSE,TRUE
+Emergency_Stop_2,BOOL,%I0.1,Secondary emergency stop,FALSE,TRUE
+Safety_Gate_1,BOOL,%I0.2,Safety gate 1 position switch,FALSE,TRUE
+Safety_Gate_2,BOOL,%I0.3,Safety gate 2 position switch,FALSE,TRUE
+Safety_Gate_3,BOOL,%I0.4,Safety gate 3 position switch,FALSE,TRUE
+Light_Curtain_1,BOOL,%I0.5,Light curtain zone 1,FALSE,TRUE
+Light_Curtain_2,BOOL,%I0.6,Light curtain zone 2,FALSE,TRUE
+Safety_Mat_1,BOOL,%I0.7,Safety mat area 1,FALSE,TRUE
+Safety_Mat_2,BOOL,%I1.0,Safety mat area 2,FALSE,TRUE
+Reset_Button,BOOL,%I1.1,Safety system reset button,FALSE,FALSE
+Start_Button,BOOL,%I1.2,System start button,FALSE,FALSE
+Stop_Button,BOOL,%I1.3,System stop button,FALSE,FALSE
+Mode_Selector,BOOL,%I1.4,Auto/Manual mode selector,FALSE,FALSE
+Motor_1_Start,BOOL,%Q0.0,Motor 1 start command,FALSE,FALSE
+Motor_1_Stop,BOOL,%Q0.1,Motor 1 stop command,TRUE,FALSE
+Motor_2_Start,BOOL,%Q0.2,Motor 2 start command,FALSE,FALSE
+Motor_2_Stop,BOOL,%Q0.3,Motor 2 stop command,TRUE,FALSE
+Safety_Relay_1,BOOL,%Q0.4,Safety relay output 1,FALSE,TRUE
+Safety_Relay_2,BOOL,%Q0.5,Safety relay output 2,FALSE,TRUE
+Alarm_Horn,BOOL,%Q0.6,Alarm horn output,FALSE,FALSE
+Warning_Light,BOOL,%Q0.7,Warning light output,FALSE,FALSE
+Conveyor_Speed,REAL,%QW100,Conveyor speed setpoint (m/min),0.0,FALSE
+Tank_Level,REAL,%IW200,Tank level sensor (mm),0.0,FALSE
+Pressure_Sensor,REAL,%IW202,Hydraulic pressure (bar),0.0,FALSE
+Temperature_1,REAL,%IW204,Temperature sensor 1 (°C),20.0,FALSE
+Temperature_2,REAL,%IW206,Temperature sensor 2 (°C),20.0,FALSE
+Production_Count,DINT,%MD300,Production counter,0,FALSE
+Batch_Count,DINT,%MD304,Batch counter,0,FALSE
+Operating_Hours,DINT,%MD308,Total operating hours,0,FALSE
+Safety_Violations,DINT,%MD312,Safety violation counter,0,TRUE
+Last_Alarm_Code,WORD,%MW400,Last alarm code,0,FALSE
+System_Status,WORD,%MW402,Overall system status,0,FALSE

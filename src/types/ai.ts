@@ -1,6 +1,6 @@
 export type VendorType = 'Rockwell' | 'Siemens' | 'Beckhoff' | 'Generic';
 
-export type TaskType = 'qna' | 'code_gen' | 'code_edit' | 'debug' | 'optimize' | 'calc' | 'checklist' | 'report';
+export type TaskType = 'qna' | 'code_gen' | 'code_edit' | 'debug' | 'optimize' | 'calc' | 'checklist' | 'report' | 'safety_analysis' | 'compliance_check' | 'risk_assessment' | 'safety_code_gen' | 'audit_report' | 'sil_assessment' | 'project_planning' | 'integration_design' | 'schedule_management' | 'resource_planning' | 'stakeholder_coordination';
 
 export type WrapperType = 'A' | 'B';
 
@@ -198,6 +198,69 @@ export interface Conversation {
   createdAt: Date;
   updatedAt: Date;
   projectId?: string;
+  uploadedFiles?: Array<{
+    filename: string;
+    type: string;
+    size: number;
+    uploadedAt: Date;
+    processedData?: any;
+  }>;
+}
+
+// Wrapper C Response (Verification & Self-Check Layer)
+export interface WrapperCResponse {
+  status: 'ok' | 'needs_input' | 'error';
+  task_type: TaskType;
+  assumptions: string[];
+  answer_md: string;
+  artifacts: {
+    code: CodeArtifact[];
+    tables: TableArtifact[];
+    reports: Array<{
+      title: string;
+      content_md: string;
+    }>;
+    anchors: Array<{
+      id: string;
+      file: string;
+      page?: number;
+      note: string;
+    }>;
+    citations: string[];
+  };
+  verification_notes: string;
+  next_actions: string[];
+  errors: string[];
+}
+
+// Wrapper D Response (Multi-Perspective Role Check)
+export interface WrapperDResponse {
+  status: 'ok' | 'needs_input' | 'error';
+  task_type: TaskType;
+  assumptions: string[];
+  answer_md: string;
+  artifacts: {
+    code: CodeArtifact[];
+    tables: TableArtifact[];
+    reports: Array<{
+      title: string;
+      content_md: string;
+    }>;
+    anchors: Array<{
+      id: string;
+      file: string;
+      page?: number;
+      note: string;
+    }>;
+    citations: string[];
+  };
+  expert_perspectives: {
+    automation_engineer: string;
+    technical_writer: string;
+    quality_inspector: string;
+  };
+  next_actions: string[];
+  errors: string[];
 }
 
 // Alias for WrapperAResponse to match the import
