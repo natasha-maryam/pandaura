@@ -257,7 +257,7 @@ export default function AskPandaura({ sessionMode = false }: AskPandauraProps) {
       );
 
       // Handle file uploads
-      let response: WrapperAResponse | WrapperBResponse;
+      let response: WrapperAResponse | WrapperBResponse | null = null;
       let streamingHandled = false;
       
       if (selectedFiles.length > 0 || (selectedWrapper === 'B' && currentConversation?.uploadedFiles?.length)) {
@@ -509,11 +509,187 @@ export default function AskPandaura({ sessionMode = false }: AskPandauraProps) {
             setIsLoading(false);
             return;
           }
-          // Session has files - allow text-only analysis to continue
+          // Session has files - allow text-only analysis to continue with Wrapper B
+          if (streamingEnabled) {
+            setIsStreaming(true);
+            let finalStreamContent = '';
+            
+            // Add a placeholder streaming message immediately
+            const streamingMessageId = generateMessageId();
+            const streamingMessage: AIMessage = {
+              id: streamingMessageId,
+              role: 'assistant',
+              content: '',
+              timestamp: new Date(),
+              isStreaming: true,
+              wrapperType: 'B',
+            };
+
+            const conversationWithStreaming = {
+              ...updatedConversation,
+              messages: [...updatedConversation.messages, streamingMessage],
+              updatedAt: new Date(),
+            };
+            setCurrentConversation(conversationWithStreaming);
+            setConversations(prev => 
+              prev.map(conv => conv.id === conversation!.id ? conversationWithStreaming : conv)
+            );
+            
+            // For follow-up questions, include context about previously uploaded files
+            const fileContext = currentConversation.uploadedFiles.map(f => 
+              `Previously uploaded: ${f.filename} (${f.type})`
+            ).join(', ');
+            const contextualPrompt = `${userMessage}\n\n[Context: This question relates to previously uploaded files: ${fileContext}]`;
+            
+            const fullResponse = await aiService.sendWrapperBStreamingMessage(
+              {
+                prompt: contextualPrompt,
+                projectId: projectId || undefined,
+                sessionId,
+                files: [], // No new files for text-only follow-up
+                stream: true,
+              },
+              (chunk: StreamChunk) => {
+                if (chunk.type === 'status') {
+                  // Show status updates
+                  setCurrentConversation(prevConv => {
+                    if (!prevConv) return prevConv;
+                    const updatedMessages = prevConv.messages.map(msg => 
+                      msg.id === streamingMessageId 
+                        ? { ...msg, content: `*${chunk.content}*` }
+                        : msg
+                    );
+                    return { ...prevConv, messages: updatedMessages };
+                  });
+                } else if (chunk.type === 'start') {
+                  // Clear status and start streaming content
+                  setCurrentConversation(prevConv => {
+                    if (!prevConv) return prevConv;
+                    const updatedMessages = prevConv.messages.map(msg => 
+                      msg.id === streamingMessageId 
+                        ? { ...msg, content: '' }
+                        : msg
+                    );
+                    return { ...prevConv, messages: updatedMessages };
+                  });
+                } else if (chunk.type === 'chunk' && chunk.content) {
+                  finalStreamContent += chunk.content;
+                  setCurrentConversation(prevConv => {
+                    if (!prevConv) return prevConv;
+                    const updatedMessages = prevConv.messages.map(msg => 
+                      msg.id === streamingMessageId 
+                        ? { ...msg, content: finalStreamContent }
+                        : msg
+                    );
+                    return { ...prevConv, messages: updatedMessages };
+                  });
+                } else if (chunk.type === 'complete' && chunk.fullResponse) {
+                  // Store the complete response data for artifacts
+                  finalStreamContent = chunk.answer || finalStreamContent;
+                  
+                  // Type guard for fullResponse
+                  const fullResponse = chunk.fullResponse;
+                  if (typeof fullResponse === 'object' && fullResponse !== null) {
+                    setCurrentConversation(prevConv => {
+                      if (!prevConv) return prevConv;
+                      const updatedMessages = prevConv.messages.map(msg => 
+                        msg.id === streamingMessageId 
+                          ? { 
+                              ...msg, 
+                              content: finalStreamContent,
+                              task_type: (fullResponse as any).task_type,
+                              artifacts: (fullResponse as any).artifacts,
+                              processedFiles: (fullResponse as any).processed_files
+                            }
+                          : msg
+                      );
+                      return { ...prevConv, messages: updatedMessages };
+                    });
+                    setConversations(prev => 
+                      prev.map(conv => {
+                        if (conv.id === conversation!.id) {
+                          const updatedMessages = conv.messages.map(msg => 
+                            msg.id === streamingMessageId 
+                              ? { 
+                                  ...msg, 
+                                  content: finalStreamContent,
+                                  task_type: (fullResponse as any).task_type,
+                                  artifacts: (fullResponse as any).artifacts,
+                                  processedFiles: (fullResponse as any).processed_files
+                                }
+                              : msg
+                          );
+                          return { ...conv, messages: updatedMessages };
+                        }
+                        return conv;
+                      })
+                    );
+                  }
+                } else if (chunk.type === 'end') {
+                  setIsStreaming(false);
+                  
+                  // Mark streaming as complete
+                  setCurrentConversation(prevConv => {
+                    if (!prevConv) return prevConv;
+                    const updatedMessages = prevConv.messages.map(msg => 
+                      msg.id === streamingMessageId 
+                        ? { ...msg, isStreaming: false }
+                        : msg
+                    );
+                    return { ...prevConv, messages: updatedMessages };
+                  });
+                  setConversations(prev => 
+                    prev.map(conv => {
+                      if (conv.id === conversation!.id) {
+                        const updatedMessages = conv.messages.map(msg => 
+                          msg.id === streamingMessageId 
+                            ? { ...msg, isStreaming: false }
+                            : msg
+                        );
+                        return { ...conv, messages: updatedMessages };
+                      }
+                      return conv;
+                    })
+                  );
+                } else if (chunk.type === 'error') {
+                  throw new Error(chunk.error || 'Streaming error');
+                }
+              }
+            );
+            
+            // Create response object for streaming (will be used later if needed)
+            response = {
+              status: 'ok' as const,
+              task_type: 'doc_qa' as const,
+              assumptions: [],
+              answer_md: finalStreamContent,
+              artifacts: { code: [], tables: [], reports: [], anchors: [], citations: [] },
+              next_actions: [],
+              errors: [],
+            };
+            
+            streamingHandled = true;
+          } else {
+            // Non-streaming Wrapper B for text-only follow-up
+            const fileContext = currentConversation.uploadedFiles.map(f => 
+              `Previously uploaded: ${f.filename} (${f.type})`
+            ).join(', ');
+            const contextualPrompt = `${userMessage}\n\n[Context: This question relates to previously uploaded files: ${fileContext}]`;
+            
+            const wrapperBResponse = await aiService.analyzeDocumentsWithWrapperB({
+              prompt: contextualPrompt,
+              projectId: projectId || undefined,
+              sessionId,
+              files: [], // No new files for text-only follow-up
+            });
+            
+            response = wrapperBResponse;
+            userMessageObj.wrapperType = 'B';
+          }
         }
         
         // Regular text message for Wrapper A
-        if (streamingEnabled) {
+        if (selectedWrapper === 'A' && streamingEnabled) {
           setIsStreaming(true);
           let finalStreamContent = '';
           
@@ -697,19 +873,21 @@ export default function AskPandaura({ sessionMode = false }: AskPandauraProps) {
           
           // For streaming, we already updated the message, so skip creating a new one
           streamingHandled = true;
-        } else {
-          // Non-streaming request
+        } else if (selectedWrapper === 'A') {
+          // Non-streaming request for Wrapper A
           response = await aiService.sendMessage({
             prompt: userMessage,
             projectId: projectId || undefined,
             sessionId,
             stream: false,
           });
+          userMessageObj.wrapperType = 'A';
         }
+        // Non-streaming Wrapper B is already handled above
       }
 
-      // Only create AI response message if not handled by streaming
-      if (!streamingEnabled || !streamingHandled) {
+      // Only create AI response message if not handled by streaming and response exists
+      if ((!streamingEnabled || !streamingHandled) && response) {
         // Create AI response message
         let finalMessageContent: string;
         let artifacts: any = undefined;
