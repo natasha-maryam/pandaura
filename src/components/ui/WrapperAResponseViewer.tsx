@@ -9,12 +9,14 @@ interface Props {
   response: WrapperAResponse;
   onSaveToProject?: (artifact: CodeArtifact) => void;
   onMoveToLogicStudio?: (artifact: CodeArtifact) => void;
+  hideStatusAndTaskType?: boolean;
 }
 
 export const WrapperAResponseViewer: React.FC<Props> = ({
   response,
   onSaveToProject,
   onMoveToLogicStudio,
+  hideStatusAndTaskType = false,
 }) => {
   // Check if there are meaningful artifacts that warrant showing the full viewer
   const hasMeaningfulArtifacts = 
@@ -30,21 +32,23 @@ export const WrapperAResponseViewer: React.FC<Props> = ({
 
   return (
     <div className="space-y-4">
-      {/* Status and Task Type - Only show for meaningful artifacts */}
-      <div className="flex gap-2">
-        <span className={`px-2 py-1 rounded text-sm ${
-          response.status === 'ok'
-            ? 'bg-green-100 text-green-800'
-            : response.status === 'needs_input'
-            ? 'bg-yellow-100 text-yellow-800'
-            : 'bg-red-100 text-red-800'
-        }`}>
-          {response.status.toUpperCase()}
-        </span>
-        <span className="bg-blue-100 text-blue-800 px-2 py-1 rounded text-sm">
-          {response.task_type}
-        </span>
-      </div>
+      {/* Status and Task Type - Only show when not hidden and for meaningful artifacts */}
+      {!hideStatusAndTaskType && (
+        <div className="flex gap-2">
+          <span className={`px-2 py-1 rounded text-sm ${
+            response.status === 'ok'
+              ? 'bg-green-100 text-green-800'
+              : response.status === 'needs_input'
+              ? 'bg-yellow-100 text-yellow-800'
+              : 'bg-red-100 text-red-800'
+          }`}>
+            {response.status.toUpperCase()}
+          </span>
+          <span className="bg-blue-100 text-blue-800 px-2 py-1 rounded text-sm">
+            {response.task_type}
+          </span>
+        </div>
+      )}
 
       {/* Assumptions */}
       {response.assumptions.length > 0 && (
@@ -60,12 +64,14 @@ export const WrapperAResponseViewer: React.FC<Props> = ({
         </Card>
       )}
 
-      {/* Main Answer */}
-      <Card>
-        <div className="prose max-w-none">
-          <ReactMarkdown>{response.answer_md}</ReactMarkdown>
-        </div>
-      </Card>
+      {/* Main Answer - Only show if there's content */}
+      {response.answer_md && response.answer_md.trim() && (
+        <Card>
+          <div className="prose max-w-none">
+            <ReactMarkdown>{response.answer_md}</ReactMarkdown>
+          </div>
+        </Card>
+      )}
 
       {/* Code Artifacts */}
       {response.artifacts.code.map((artifact, index) => (

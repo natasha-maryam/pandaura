@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from "react";
 import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 import {
   UploadCloud,
   MessageSquare,
@@ -29,6 +30,7 @@ import { aiService } from "../services/aiService";
 import { AIMessage, Conversation, WrapperAResponse, WrapperBResponse, StreamChunk, WrapperType, TaskType } from "../types/ai";
 import { CodeArtifactViewer } from "../components/ui/CodeArtifactViewer";
 import { TableArtifactViewer } from "../components/ui/TableArtifactViewer";
+import { parseMarkdownTables, removeMarkdownTables, parseCitations, removeCitations, parseProcessedFiles, removeProcessedFiles } from "../utils/markdownTableParser";
 
 interface AskPandauraProps {
   sessionMode?: boolean;
@@ -399,8 +401,45 @@ export default function AskPandaura({ sessionMode = false }: AskPandauraProps) {
                 
                 // Extract artifacts from the full response if available
                 let artifacts = undefined;
+                let processedFiles = undefined;
+                
                 if (chunk.fullResponse && typeof chunk.fullResponse === 'object' && 'artifacts' in chunk.fullResponse) {
-                  artifacts = (chunk.fullResponse as WrapperAResponse).artifacts;
+                  // Both WrapperA and WrapperB now have the same artifact structure
+                  artifacts = (chunk.fullResponse as WrapperAResponse | WrapperBResponse).artifacts;
+                  processedFiles = (chunk.fullResponse as WrapperBResponse).processed_files;
+                } else {
+                  // If no artifacts in response, try to parse tables and other data from markdown content
+                  console.log("Parsing content for tables:", chunk.answer);
+                  const parsedTables = parseMarkdownTables(chunk.answer);
+                  const parsedCitations = parseCitations(chunk.answer);
+                  const parsedFiles = parseProcessedFiles(chunk.answer);
+                  
+                  console.log("Parsed tables:", parsedTables);
+                  console.log("Parsed citations:", parsedCitations);
+                  console.log("Parsed files:", parsedFiles);
+                  
+                  if (parsedTables.length > 0 || parsedCitations.length > 0 || parsedFiles.length > 0) {
+                    artifacts = {
+                      code: [],
+                      tables: parsedTables,
+                      citations: parsedCitations,
+                      reports: [],
+                      anchors: []
+                    };
+                    processedFiles = parsedFiles;
+                  }
+                }
+                
+                // Clean the content by removing parsed elements to avoid duplication
+                let cleanContent = chunk.answer;
+                if (artifacts?.tables && artifacts.tables.length > 0) {
+                  cleanContent = removeMarkdownTables(cleanContent);
+                }
+                if (artifacts?.citations && artifacts.citations.length > 0) {
+                  cleanContent = removeCitations(cleanContent);
+                }
+                if (processedFiles && processedFiles.length > 0) {
+                  cleanContent = removeProcessedFiles(cleanContent);
                 }
                 
                 // Update the final message with artifacts
@@ -408,7 +447,7 @@ export default function AskPandaura({ sessionMode = false }: AskPandauraProps) {
                   if (!prevConv) return prevConv;
                   const updatedMessages = prevConv.messages.map(msg => 
                     msg.id === streamingMessageId 
-                      ? { ...msg, content: chunk.answer || '', isStreaming: false, artifacts }
+                      ? { ...msg, content: cleanContent || '', isStreaming: false, artifacts, processedFiles }
                       : msg
                   );
                   return { ...prevConv, messages: updatedMessages };
@@ -418,7 +457,7 @@ export default function AskPandaura({ sessionMode = false }: AskPandauraProps) {
                     if (conv.id === conversation!.id) {
                       const updatedMessages = conv.messages.map(msg => 
                         msg.id === streamingMessageId 
-                          ? { ...msg, content: chunk.answer || '', isStreaming: false, artifacts }
+                          ? { ...msg, content: cleanContent || '', isStreaming: false, artifacts, processedFiles }
                           : msg
                       );
                       return { ...conv, messages: updatedMessages };
@@ -803,13 +842,13 @@ export default function AskPandaura({ sessionMode = false }: AskPandauraProps) {
                           </div>
                         ) : message.content ? (
                           <div className="relative">
-                            <ReactMarkdown>{cleanMessageContent(message.content)}</ReactMarkdown>
+                            <ReactMarkdown remarkPlugins={[remarkGfm]}>{cleanMessageContent(message.content)}</ReactMarkdown>
                             {message.isStreaming && (
                               <span className="inline-block w-2 h-4 bg-blue-500 ml-1 animate-pulse"></span>
                             )}
                           </div>
                         ) : (
-                          <ReactMarkdown>{cleanMessageContent(message.content || "")}</ReactMarkdown>
+                          <ReactMarkdown remarkPlugins={[remarkGfm]}>{cleanMessageContent(message.content || "")}</ReactMarkdown>
                         )}
                       </div>
 
@@ -826,16 +865,12 @@ export default function AskPandaura({ sessionMode = false }: AskPandauraProps) {
                           </div>
                         )}
 
-                      {/* Render full response if it's a complete AI response with meaningful artifacts */}
+                      {/* Render artifacts using WrapperAResponseViewer - single source of truth */}
                       {message.role === "assistant" && 
                        message.artifacts && 
                        (() => {
-                         // Debug logging to help troubleshoot
-                         console.log("Message artifacts:", message.artifacts);
-                         console.log("Code artifacts:", message.artifacts.code);
-                         console.log("Table artifacts:", message.artifacts.tables);
+                         // Only show WrapperAResponseViewer if there are actual meaningful artifacts
                          return (
-                           // Only show WrapperAResponseViewer if there are actual meaningful artifacts
                            (message.artifacts.code && message.artifacts.code.length > 0) || 
                            (message.artifacts.tables && message.artifacts.tables.length > 0) || 
                            message.artifacts.diff ||
@@ -870,59 +905,10 @@ export default function AskPandaura({ sessionMode = false }: AskPandauraProps) {
                             onMoveToLogicStudio={() => {
                               // Handle move to Logic Studio
                             }}
+                            hideStatusAndTaskType={true}
                           />
                         </div>
                        )}
-
-                      {/* Legacy inline artifacts rendering (fallback) - only if meaningful artifacts exist */}
-                      {message.artifacts && 
-                       !message.artifacts.next_actions && 
-                       (
-                         (message.artifacts.code && message.artifacts.code.length > 0) ||
-                         (message.artifacts.tables && message.artifacts.tables.length > 0)
-                       ) && (
-                        <div className="mt-4 space-y-3">
-                          {/* Code artifacts */}
-                          {message.artifacts.code && message.artifacts.code.map(
-                            (artifact: any, index: number) => (
-                              <CodeArtifactViewer
-                                key={index}
-                                artifact={artifact}
-                                onSaveToProject={() => {
-                                  // Handle save to project
-                                  console.log("Save to project:", artifact);
-                                }}
-                                onMoveToLogicStudio={() => {
-                                  navigate("/logic-studio");
-                                }}
-                              />
-                            )
-                          )}
-
-                          {/* Table artifacts */}
-                          {message.artifacts.tables && message.artifacts.tables.map(
-                            (artifact: any, index: number) => (
-                              <TableArtifactViewer
-                                key={index}
-                                artifact={artifact}
-                              />
-                            )
-                          )}
-
-                          {/* Action buttons for artifacts */}
-                          {message.artifacts.tables && message.artifacts.tables.length > 0 && (
-                            <div className="flex gap-2 pt-2">
-                              <button
-                                onClick={() => navigate("/tag-database")}
-                                className="bg-white border border-light px-3 py-1 rounded text-xs hover:bg-accent-light transition-colors flex items-center gap-1"
-                              >
-                                <Database className="w-3 h-3" />
-                                Generate Tag Database
-                              </button>
-                            </div>
-                          )}
-                        </div>
-                      )}
                     </div>
                   </div>
                 </div>
@@ -932,11 +918,11 @@ export default function AskPandaura({ sessionMode = false }: AskPandauraProps) {
               {(isLoading || uploadingFiles) && !isStreaming && (
                 <div className="px-4 py-3 text-sm bg-gray-50">
                   <div className="flex items-start gap-3">
-                    <div className="w-8 h-8 bg-primary rounded-full flex items-center justify-center text-xs font-medium text-white shrink-0">
+                    <div className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-medium text-white shrink-0">
                       <img
                         src={pandauraLogo}
                         alt="Pandaura"
-                        className="w-5 h-5 rounded-full object-cover"
+                        className="w-8 h-8 rounded-full object-cover"
                       />
                     </div>
                     <div className="flex-1">

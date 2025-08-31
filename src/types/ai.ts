@@ -5,7 +5,7 @@ export type TaskType = 'qna' | 'code_gen' | 'code_edit' | 'debug' | 'optimize' |
 export type WrapperType = 'A' | 'B';
 
 export interface CodeArtifact {
-  language: 'ST';
+  language: 'ST' | string; // Allow both specific 'ST' and generic string for flexibility
   vendor: VendorType;
   compilable: boolean;
   filename: string;
@@ -168,6 +168,17 @@ export interface AIMessage {
     tables: TableArtifact[];
     citations: string[];
     diff?: string;
+    // Wrapper B specific fields
+    reports?: Array<{
+      title: string;
+      content_md: string;
+    }>;
+    anchors?: Array<{
+      id: string;
+      file: string;
+      page?: number;
+      note: string;
+    }>;
   };
   processedFiles?: Array<{
     filename: string;
