@@ -13,7 +13,7 @@ export default function SessionLayout({ children }: SessionLayoutProps) {
   return (
     <div className="flex flex-col h-screen bg-background text-primary">
       {/* Session Header */}
-      <header className="flex items-center justify-between bg-surface px-6 py-4 border-b border-light shadow">
+      <header className="flex items-center justify-between bg-surface px-6 py-4 border-b border-light">
         <div className="flex items-center gap-4">
           <button
             onClick={() => navigate(-1)}

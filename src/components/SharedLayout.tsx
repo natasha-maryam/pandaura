@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useMemo, useEffect } from "react";
+import React, { useState, useCallback, useMemo, useEffect, useRef } from "react";
 import { useNavigate, useLocation, useParams } from "react-router-dom";
 import {
   Menu,
@@ -8,13 +8,16 @@ import {
   Database,
   Download,
   X,
+  Plug,
+  User,
+  LogOut,
 } from "lucide-react";
 import logo from "../assets/logo.png";
-import NavbarIcons from "../pages/NavbarIcons";
 import PandauraOrb from "../components/PandauraOrb";
 import { useModuleState } from "../contexts/ModuleStateContext";
 import { config, getHostInfo, isOffline } from "../config/environment";
 import { useProjectNavigationProtection } from "../hooks/useNavigationProtection";
+import { useAuth } from "../contexts/AuthContext";
 
 const tools = [
   { name: "Logic Studio", path: "/logic-studio", icon: Cpu },
@@ -50,10 +53,13 @@ interface SharedLayoutProps {
 export default function SharedLayout({ children }: SharedLayoutProps) {
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [showSaveModal, setShowSaveModal] = useState(false);
+  const [profileExpanded, setProfileExpanded] = useState(false);
   const navigate = useNavigate();
   const location = useLocation();
   const { projectId } = useParams<{ projectId: string }>();
   const { saveModuleState } = useModuleState();
+  const { logout } = useAuth();
+  const containerRef = useRef<HTMLDivElement>(null);
 
   // Check if we're in a project workspace context
   const isProjectWorkspace = location.pathname.startsWith('/workspace/');
@@ -78,6 +84,10 @@ export default function SharedLayout({ children }: SharedLayoutProps) {
     hasUnsavedChanges && isProjectWorkspace,
     handleSaveAndNavigate
   );
+
+  const toggleProfile = () => {
+    setProfileExpanded(!profileExpanded);
+  };
 
   // Listen for unsaved changes from child components
   useEffect(() => {
@@ -165,7 +175,7 @@ export default function SharedLayout({ children }: SharedLayoutProps) {
     const offline = isOffline();
     
     return (
-      <header className="flex items-center justify-between bg-surface px-6 py-4 border-b border-light shadow">
+      <header className="flex items-center justify-between bg-surface px-6 py-4 border-b border-light">
         <div className="flex items-center gap-3">
           <button 
             onClick={handleLogoClick} 
@@ -197,7 +207,6 @@ export default function SharedLayout({ children }: SharedLayoutProps) {
               Offline Mode
             </div>
           )}
-          <NavbarIcons />
         </div>
       </header>
     );
@@ -205,7 +214,8 @@ export default function SharedLayout({ children }: SharedLayoutProps) {
 
   const renderSidebar = useMemo(() => (
     <div
-      className={`h-full overflow-y-auto scrollbar-hide bg-gray-light border-r border-light shadow-card p-2 space-y-4 transition-all duration-200 will-change-transform ${
+      ref={containerRef}
+      className={`h-full overflow-y-auto scrollbar-hide bg-gray-light border-r border-light p-2 space-y-4 transition-all duration-200 will-change-transform ${
         sidebarOpen ? "w-72" : "w-16"
       }`}
       style={{ scrollBehavior: 'smooth' }}
@@ -218,6 +228,84 @@ export default function SharedLayout({ children }: SharedLayoutProps) {
       >
         <Menu className="w-8 h-8" />
       </button>
+
+      {/* Profile and Integration Icons */}
+      <div className="space-y-2 pb-4 border-b border-light/50">
+        {/* Profile Icon */}
+        <div>
+          <div
+            onClick={toggleProfile}
+            className={`flex items-center ${!sidebarOpen ? "justify-center" : ""} cursor-pointer py-3 rounded-md transition-colors duration-150 hover:bg-gray hover:text-primary hover:shadow-sm`}
+            title={sidebarOpen ? "" : "User Profile"}
+          >
+            <User className="w-6 h-6 min-w-[1.5rem] min-h-[1.5rem]" />
+            {sidebarOpen && <span className="text-sm font-medium ml-2">Profile</span>}
+          </div>
+          {profileExpanded && sidebarOpen && (
+            <div className="ml-7 mt-1 space-y-1">
+              <div
+                onClick={() => {
+                  console.log("Navigating to profile...");
+                  navigate("/profile", { state: { from: location.pathname } });
+                }}
+                className="flex items-center gap-2 px-3 py-2 text-xs text-muted hover:text-primary hover:bg-gray-100 rounded cursor-pointer transition-colors"
+              >
+                👤 Profile
+              </div>
+              <div
+                onClick={() => {
+                  console.log("Navigating to feedback...");
+                  navigate("/feedback");
+                }}
+                className="flex items-center gap-2 px-3 py-2 text-xs text-muted hover:text-primary hover:bg-gray-100 rounded cursor-pointer transition-colors"
+              >
+                💬 Feedback
+              </div>
+              <div
+                onClick={() => {
+                  console.log("Navigating to privacy...");
+                  navigate("/privacy");
+                }}
+                className="flex items-center gap-2 px-3 py-2 text-xs text-muted hover:text-primary hover:bg-gray-100 rounded cursor-pointer transition-colors"
+              >
+                🔐 Privacy
+              </div>
+              <div
+                onClick={() => {
+                  console.log("Navigating to case study library...");
+                  navigate("/case-study-library");
+                }}
+                className="flex items-center gap-2 px-3 py-2 text-xs text-muted hover:text-primary hover:bg-gray-100 rounded cursor-pointer transition-colors"
+              >
+                📂 Case Studies
+              </div>
+              <div
+                onClick={() => {
+                  logout();
+                  navigate("/signin");
+                }}
+                className="flex items-center gap-2 px-3 py-2 text-xs text-muted hover:text-primary hover:bg-gray-100 rounded cursor-pointer transition-colors"
+              >
+                <LogOut className="w-3 h-3" />
+                Log Out
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Integrations Icon - Commented out for now */}
+        {/* <div className="relative">
+          <div
+            className={`flex items-center ${!sidebarOpen ? "justify-center" : ""} cursor-pointer py-3 rounded-md transition-colors duration-150 hover:bg-gray hover:text-primary hover:shadow-sm`}
+            title={sidebarOpen ? "" : "Integrations"}
+          >
+            <Plug className="w-6 h-6 min-w-[1.5rem] min-h-[1.5rem]" />
+            {sidebarOpen && <span className="text-sm font-medium ml-2">Integrations</span>}
+          </div>
+        </div> */}
+      </div>
+
+      {/* Main Navigation Tools */}
       {navigationTools.map((tool) => {
         const Icon = tool.icon;
         const isActive = getCurrentTool() === tool.name;
@@ -230,6 +318,7 @@ export default function SharedLayout({ children }: SharedLayoutProps) {
                   ? " text-primary shadow-sm"
                   : "hover:bg-gray hover:text-primary hover:shadow-sm"
               }`}
+              title={sidebarOpen ? "" : tool.name}
             >
               <Icon className="w-6 h-6 min-w-[1.5rem] min-h-[1.5rem]" />
               {sidebarOpen && <span className="text-sm font-medium ml-2">{tool.name}</span>}
@@ -248,7 +337,7 @@ export default function SharedLayout({ children }: SharedLayoutProps) {
         );
       })}
     </div>
-  ), [sidebarOpen, location.pathname, handleToolClick]);
+  ), [sidebarOpen, location.pathname, handleToolClick, profileExpanded, navigate, logout, toggleProfile]);
 
   const renderSaveModal = () => (
     showSaveModal && (

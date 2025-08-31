@@ -11,7 +11,6 @@ import {
   FolderOpen
 } from "lucide-react";
 import logo from "../assets/logo.png";
-import NavbarIcons from "./NavbarIcons";
 import { Card, Button } from "../components/ui";
 
 // Import components directly to avoid barrel export issues
@@ -347,7 +346,7 @@ export default function Home() {
       return (
         <div className="min-h-screen bg-background">
           {/* Header */}
-          <header className="flex items-center justify-between bg-surface px-6 py-4 border-b border-light shadow">
+          <header className="flex items-center justify-between bg-surface px-6 py-4 border-b border-light">
             <div className="flex items-center gap-3">
               <img 
                 src={logo} 
@@ -355,9 +354,6 @@ export default function Home() {
                 className="h-16 w-auto filter-none" 
                 style={{ filter: 'none', imageRendering: 'crisp-edges' }}
               />
-            </div>
-            <div className="flex items-center space-x-4">
-              <NavbarIcons />
             </div>
           </header>
           
@@ -389,9 +385,6 @@ export default function Home() {
               className="h-16 w-auto filter-none" 
               style={{ filter: 'none', imageRendering: 'crisp-edges' }}
             />
-          </div>
-          <div className="flex items-center space-x-4">
-            <NavbarIcons />
           </div>
         </header>
 
@@ -435,7 +428,7 @@ export default function Home() {
     return (
       <div className="min-h-screen bg-background">
         {/* Header */}
-        <header className="flex items-center justify-between bg-surface px-6 py-4 border-b border-light shadow">
+        <header className="flex items-center justify-between bg-surface px-6 py-4 border-b border-light">
           <div className="flex items-center gap-3">
             <img 
               src={logo} 
@@ -443,9 +436,6 @@ export default function Home() {
               className="h-16 w-auto filter-none" 
               style={{ filter: 'none', imageRendering: 'crisp-edges' }}
             />
-          </div>
-          <div className="flex items-center space-x-4">
-            <NavbarIcons />
           </div>
         </header>
 
@@ -488,9 +478,6 @@ export default function Home() {
               style={{ filter: 'none', imageRendering: 'crisp-edges' }}
             />
           </div>
-          <div className="flex items-center space-x-4">
-            <NavbarIcons />
-          </div>
         </header>
 
         <QuickToolsList
@@ -505,7 +492,7 @@ export default function Home() {
   return (
     <div className="min-h-screen bg-background">
       {/* Header */}
-      <header className="flex items-center justify-between bg-surface px-6 py-4 border-b border-light shadow">
+      <header className="flex items-center justify-between bg-surface px-6 py-4 border-b border-light">
         <div className="flex items-center gap-3">
           <img 
             src={logo} 
@@ -513,9 +500,6 @@ export default function Home() {
             className="h-16 w-auto filter-none" 
             style={{ filter: 'none', imageRendering: 'crisp-edges' }}
           />
-        </div>
-        <div className="flex items-center space-x-4">
-          <NavbarIcons />
         </div>
       </header>
 

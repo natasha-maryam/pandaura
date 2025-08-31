@@ -1,0 +1,95 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Document>
+  <Engineering version="V17">
+    <SW.Blocks.GlobalDB name="GlobalDB_1">
+      <AttributeList>
+        <Name>Safety_Tags</Name>
+        <Number>1</Number>
+        <ProgrammingLanguage>DB</ProgrammingLanguage>
+      </AttributeList>
+      <SW.Blocks.CompileUnit>
+        <AttributeList>
+          <Name>Safety_Tags</Name>
+          <Number>1</Number>
+        </AttributeList>
+        <SW.Blocks.CompileUnitCommon>
+          <AttributeList>
+            <Name>Safety_Tags</Name>
+          </AttributeList>
+          <SW.Blocks.CompileUnitContent>
+            <SW.Blocks.DataBlock>
+              <AttributeList>
+                <Name>Safety_Tags</Name>
+                <Number>1</Number>
+              </AttributeList>
+              <SW.Blocks.DataBlockContent>
+                <Member Name="EmergencyStop" Datatype="Bool">
+                  <Comment>Main emergency stop button</Comment>
+                  <StartValue>FALSE</StartValue>
+                </Member>
+                <Member Name="SafetyGate1" Datatype="Bool">
+                  <Comment>Safety gate position sensor</Comment>
+                  <StartValue>FALSE</StartValue>
+                </Member>
+                <Member Name="SafetyGate2" Datatype="Bool">
+                  <Comment>Safety gate position sensor</Comment>
+                  <StartValue>FALSE</StartValue>
+                </Member>
+                <Member Name="LightCurtain" Datatype="Bool">
+                  <Comment>Light curtain status</Comment>
+                  <StartValue>FALSE</StartValue>
+                </Member>
+                <Member Name="MotorContactor" Datatype="Bool">
+                  <Comment>Motor contactor feedback</Comment>
+                  <StartValue>FALSE</StartValue>
+                </Member>
+                <Member Name="ConveyorSpeed" Datatype="Real">
+                  <Comment>Conveyor belt speed in m/min</Comment>
+                  <StartValue>0.0</StartValue>
+                </Member>
+                <Member Name="Temperature_Tank1" Datatype="Real">
+                  <Comment>Tank 1 temperature in Celsius</Comment>
+                  <StartValue>20.0</StartValue>
+                </Member>
+                <Member Name="Pressure_Line1" Datatype="Real">
+                  <Comment>Hydraulic line pressure in bar</Comment>
+                  <StartValue>0.0</StartValue>
+                </Member>
+              </SW.Blocks.DataBlockContent>
+            </SW.Blocks.DataBlock>
+          </SW.Blocks.CompileUnitContent>
+        </SW.Blocks.CompileUnitCommon>
+      </SW.Blocks.CompileUnit>
+    </SW.Blocks.GlobalDB>
+    <SW.Blocks.FB name="SafetyFunction">
+      <AttributeList>
+        <Name>FB_Safety_Logic</Name>
+        <Number>100</Number>
+        <ProgrammingLanguage>LAD</ProgrammingLanguage>
+      </AttributeList>
+      <Interface>
+        <Sections>
+          <Section Name="Input">
+            <Member Name="EmergencyStop" Datatype="Bool">
+              <Comment>Emergency stop input</Comment>
+            </Member>
+            <Member Name="SafetyGates" Datatype="Bool">
+              <Comment>All safety gates closed</Comment>
+            </Member>
+            <Member Name="LightCurtain" Datatype="Bool">
+              <Comment>Light curtain clear</Comment>
+            </Member>
+          </Section>
+          <Section Name="Output">
+            <Member Name="SafeToOperate" Datatype="Bool">
+              <Comment>Safe to operate output</Comment>
+            </Member>
+            <Member Name="AlarmActive" Datatype="Bool">
+              <Comment>Safety alarm active</Comment>
+            </Member>
+          </Section>
+        </Sections>
+      </Interface>
+    </SW.Blocks.FB>
+  </Engineering>
+</Document>

@@ -1,6 +1,8 @@
 import { 
   WrapperARequest, 
   WrapperAResponse, 
+  WrapperBRequest,
+  WrapperBResponse,
   HealthResponse, 
   StreamChunk, 
   DocumentUploadRequest, 
@@ -239,6 +241,29 @@ export class AIService {
     return this.handleResponse(response);
   }
 
+  public async analyzeDocumentsWithWrapperB(request: WrapperBRequest): Promise<WrapperBResponse> {
+    const formData = new FormData();
+    formData.append('prompt', request.prompt);
+    
+    if (request.projectId) {
+      formData.append('projectId', request.projectId);
+    }
+    
+    if (request.sessionId) {
+      formData.append('sessionId', request.sessionId);
+    }
+
+    // Add all files to the FormData
+    request.files.forEach((file) => {
+      formData.append('files', file);
+    });
+
+    const response = await fetch(`${this.baseUrl}/wrapperB`, {
+      method: 'POST',
+      body: formData,
+    });    return this.handleResponse(response);
+  }
+
   public async uploadImage(file: File): Promise<{ status: string; image_url: string; image_info: any }> {
     const formData = new FormData();
     formData.append('image', file);
@@ -254,13 +279,22 @@ export class AIService {
   public formatResponse(response: WrapperAResponse): string {
     let formattedResponse = response.answer_md;
 
+    // Clean any "Next step →" text that might still be in the response
+    formattedResponse = formattedResponse.replace(/Next step → .*/gi, '');
+    
     // Add assumptions if any
     if (response.assumptions && response.assumptions.length > 0) {
       formattedResponse = `**Assumptions:**\n${response.assumptions.map(a => `- ${a}`).join('\n')}\n\n${formattedResponse}`;
     }
 
-    // Add next actions if any
-    if (response.next_actions && response.next_actions.length > 0) {
+    // Only add next actions if there are meaningful artifacts (code, tables, etc.)
+    const hasMeaningfulArtifacts = 
+      (response.artifacts.code && response.artifacts.code.length > 0) ||
+      (response.artifacts.tables && response.artifacts.tables.length > 0) ||
+      response.artifacts.diff ||
+      (response.artifacts.reports && response.artifacts.reports.length > 0);
+    
+    if (response.next_actions && response.next_actions.length > 0 && hasMeaningfulArtifacts) {
       formattedResponse += `\n\n**Next Steps:**\n${response.next_actions.map(a => `- ${a}`).join('\n')}`;
     }
 
@@ -292,8 +326,8 @@ export class AIService {
     return `session_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
   }
 
-  public isFileSupported(file: File): boolean {
-    const supportedTypes = [
+  public isFileSupported(file: File, wrapperType: 'A' | 'B' = 'A'): boolean {
+    const wrapperATypes = [
       // Images
       'image/jpeg',
       'image/jpg', 
@@ -314,10 +348,46 @@ export class AIService {
       'application/vnd.openxmlformats-officedocument.presentationml.presentation'
     ];
 
+    const wrapperBTypes = [
+      // PLC Files
+      'text/xml',
+      'application/xml',
+      'text/plain', // .st files
+      'application/zip',
+      // Documents
+      'application/pdf',
+      'text/plain',
+      'text/csv',
+      // Office documents
+      'application/msword',
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      'application/vnd.ms-excel',
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      // Images for analysis
+      'image/jpeg',
+      'image/jpg', 
+      'image/png',
+      'image/gif',
+      'image/webp',
+      'image/bmp',
+      'image/tiff'
+    ];
+
+    const supportedTypes = wrapperType === 'A' ? wrapperATypes : wrapperBTypes;
+    
+    // Check file extension for PLC files (Wrapper B)
+    if (wrapperType === 'B') {
+      const extension = file.name.toLowerCase().split('.').pop();
+      const plcExtensions = ['xml', 'l5x', 'ap11', 'tsproj', 'st', 'zip'];
+      if (plcExtensions.includes(extension || '')) {
+        return true;
+      }
+    }
+
     return supportedTypes.includes(file.type);
   }
 
-  public getFileTypeCategory(file: File): 'image' | 'document' | 'unsupported' {
+  public getFileTypeCategory(file: File, wrapperType: 'A' | 'B' = 'A'): 'image' | 'document' | 'plc' | 'unsupported' {
     const imageTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp', 'image/bmp', 'image/tiff'];
     const documentTypes = [
       'application/pdf',
@@ -330,6 +400,18 @@ export class AIService {
       'application/vnd.ms-powerpoint',
       'application/vnd.openxmlformats-officedocument.presentationml.presentation'
     ];
+
+    // Check for PLC files (Wrapper B specific)
+    if (wrapperType === 'B') {
+      const extension = file.name.toLowerCase().split('.').pop();
+      const plcExtensions = ['xml', 'l5x', 'ap11', 'tsproj', 'st', 'zip'];
+      if (plcExtensions.includes(extension || '') || 
+          file.type === 'text/xml' || 
+          file.type === 'application/xml' ||
+          file.type === 'application/zip') {
+        return 'plc';
+      }
+    }
 
     if (imageTypes.includes(file.type)) {
       return 'image';

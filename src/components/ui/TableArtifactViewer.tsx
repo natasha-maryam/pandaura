@@ -7,6 +7,11 @@ interface Props {
 }
 
 export const TableArtifactViewer: React.FC<Props> = ({ artifact }) => {
+  // Don't render if there's no actual data
+  if (!artifact || !artifact.schema || artifact.schema.length === 0 || !artifact.rows || artifact.rows.length === 0) {
+    return null;
+  }
+
   return (
     <Card className="my-4">
       <div className="mb-2">

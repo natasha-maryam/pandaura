@@ -14,16 +14,19 @@ import {
   Image,
   FileText,
   Brain,
+  AlertCircle,
 } from "lucide-react";
-import pandauraLogo from "../assets/logo.png";
+import pandauraLogo from "../assets/chatlogo.jpg";
+import logo from "../assets/logo.png";
 import { useModuleState } from "../contexts/ModuleStateContext";
+import { WrapperAResponseViewer } from "../components/ui/WrapperAResponseViewer";
 import { useNavigate, useParams } from "react-router-dom";
 import { useProjectAutosave } from "../components/projects/hooks";
 import AutosaveStatus from "../components/ui/AutosaveStatus";
 import TypingIndicator from "../components/ui/TypingIndicator";
 import MemoryManager from "../components/ui/MemoryManager";
 import { aiService } from "../services/aiService";
-import { AIMessage, Conversation, WrapperAResponse, StreamChunk } from "../types/ai";
+import { AIMessage, Conversation, WrapperAResponse, WrapperBResponse, StreamChunk, WrapperType, TaskType } from "../types/ai";
 import { CodeArtifactViewer } from "../components/ui/CodeArtifactViewer";
 import { TableArtifactViewer } from "../components/ui/TableArtifactViewer";
 
@@ -36,6 +39,17 @@ export default function AskPandaura({ sessionMode = false }: AskPandauraProps) {
   const navigate = useNavigate();
   const { projectId } = useParams<{ projectId: string }>();
   const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  // Helper function to clean message content
+  const cleanMessageContent = (content: string): string => {
+    if (!content) return content;
+    // Remove "Next step →" sentences and any content after it
+    // Handle various formats: "Next step →", "Next step:", "Next step -"
+    return content
+      .replace(/Next step[→:\-] .*/gi, '')
+      .replace(/Next step → .*/gi, '')
+      .trim();
+  };
 
   // Get persisted state or use defaults
   const moduleState = getModuleState('AskPandaura');
@@ -64,6 +78,10 @@ export default function AskPandaura({ sessionMode = false }: AskPandauraProps) {
   const [streamComplete, setStreamComplete] = useState(false);
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   const [uploadingFiles, setUploadingFiles] = useState(false);
+  
+  // Wrapper Selection State
+  const [selectedWrapper, setSelectedWrapper] = useState<WrapperType>('A');
+  const [showWrapperInfo, setShowWrapperInfo] = useState(false);
 
   // Enhanced autosave for project state (only in non-session mode)
   const currentProjectId = projectId ? parseInt(projectId) : null;
@@ -223,58 +241,93 @@ export default function AskPandaura({ sessionMode = false }: AskPandauraProps) {
       );
 
       // Handle file uploads
-      let response: WrapperAResponse;
+      let response: WrapperAResponse | WrapperBResponse;
       let streamingHandled = false;
       
       if (selectedFiles.length > 0) {
         setUploadingFiles(true);
         
-        // Separate images and documents
-        const images = selectedFiles.filter(file => aiService.getFileTypeCategory(file) === 'image');
-        const documents = selectedFiles.filter(file => aiService.getFileTypeCategory(file) === 'document');
-        
-        if (images.length > 0 && documents.length > 0) {
-          // Mixed uploads - send all files together
-          const formData = new FormData();
-          formData.append('prompt', userMessage);
-          formData.append('projectId', projectId || '');
-          formData.append('sessionId', sessionId);
+        if (selectedWrapper === 'B') {
+          // Use Wrapper B for document analysis
+          const wrapperBResponse = await aiService.analyzeDocumentsWithWrapperB({
+            prompt: userMessage,
+            projectId: projectId || undefined,
+            sessionId,
+            files: selectedFiles,
+          });
           
-          selectedFiles.forEach(file => {
-            if (aiService.getFileTypeCategory(file) === 'image') {
-              formData.append('image', file);
-            } else {
-              formData.append('document', file);
-            }
-          });
-
-          const uploadResponse = await fetch(`${aiService['baseUrl']}/wrapperA`, {
-            method: 'POST',
-            body: formData,
-          });
-          response = await uploadResponse.json();
-        } else if (images.length > 0) {
-          // Only images
-          response = await aiService.uploadAndAnalyzeImages({
-            prompt: userMessage,
-            projectId: projectId || undefined,
-            sessionId,
-            images,
-          });
+          // Wrapper B now returns the full schema - use it directly
+          response = wrapperBResponse;
+          
+          // Add processed files to user message for display
+          if (wrapperBResponse.processed_files) {
+            userMessageObj.processedFiles = wrapperBResponse.processed_files.map(f => ({
+              filename: f.filename,
+              type: f.type,
+              size: f.size,
+              extracted_data_available: f.extracted_data_available
+            }));
+          }
+          userMessageObj.wrapperType = 'B';
+          
         } else {
-          // Only documents
-          response = await aiService.uploadAndAnalyzeDocuments({
-            prompt: userMessage,
-            projectId: projectId || undefined,
-            sessionId,
-            files: documents,
-          });
+          // Use Wrapper A (existing logic)
+          // Separate images and documents
+          const images = selectedFiles.filter(file => aiService.getFileTypeCategory(file, 'A') === 'image');
+          const documents = selectedFiles.filter(file => aiService.getFileTypeCategory(file, 'A') === 'document');
+          
+          if (images.length > 0 && documents.length > 0) {
+            // Mixed uploads - send all files together
+            const formData = new FormData();
+            formData.append('prompt', userMessage);
+            formData.append('projectId', projectId || '');
+            formData.append('sessionId', sessionId);
+            
+            selectedFiles.forEach(file => {
+              if (aiService.getFileTypeCategory(file, 'A') === 'image') {
+                formData.append('image', file);
+              } else {
+                formData.append('document', file);
+              }
+            });
+
+            const uploadResponse = await fetch(`${aiService['baseUrl']}/wrapperA`, {
+              method: 'POST',
+              body: formData,
+            });
+            response = await uploadResponse.json();
+          } else if (images.length > 0) {
+            // Only images
+            response = await aiService.uploadAndAnalyzeImages({
+              prompt: userMessage,
+              projectId: projectId || undefined,
+              sessionId,
+              images,
+            });
+          } else {
+            // Only documents
+            response = await aiService.uploadAndAnalyzeDocuments({
+              prompt: userMessage,
+              projectId: projectId || undefined,
+              sessionId,
+              files: documents,
+            });
+          }
+          
+          userMessageObj.wrapperType = 'A';
         }
         
         setUploadingFiles(false);
         setSelectedFiles([]);
       } else {
-        // Regular text message
+        // Regular text message - only Wrapper A supports this (Wrapper B requires files)
+        if (selectedWrapper === 'B') {
+          setError("Document Analyst requires files to analyze. Please upload PLC files, documents, or images.");
+          setIsLoading(false);
+          return;
+        }
+        
+        // Regular text message for Wrapper A
         if (streamingEnabled) {
           setIsStreaming(true);
           let finalStreamContent = '';
@@ -436,14 +489,26 @@ export default function AskPandaura({ sessionMode = false }: AskPandauraProps) {
       // Only create AI response message if not handled by streaming
       if (!streamingEnabled || !streamingHandled) {
         // Create AI response message
-        const finalMessageContent = streamingEnabled ? response.answer_md : aiService.formatResponse(response);
+        let finalMessageContent: string;
+        let artifacts: any = undefined;
+        
+        // Both Wrapper A and B now use the same response format
+        finalMessageContent = streamingEnabled ? response.answer_md : aiService.formatResponse(response as WrapperAResponse);
+        artifacts = response.artifacts;
+        
         const aiMessage: AIMessage = {
           id: generateMessageId(),
           role: 'assistant',
           content: finalMessageContent,
           timestamp: new Date(),
-          artifacts: response.artifacts,
+          wrapperType: selectedWrapper,
+          artifacts,
         };
+
+        // For Wrapper B, add processed files to the AI message
+        if (selectedWrapper === 'B' && response.processed_files) {
+          aiMessage.processedFiles = response.processed_files;
+        }
 
         // Update conversation with AI response
         const finalConversation = {
@@ -645,233 +710,315 @@ export default function AskPandaura({ sessionMode = false }: AskPandauraProps) {
 
   return (
     <div className="flex flex-col bg-white h-full relative">
-      <div className="p-6 w-full mx-auto flex-1 pb-10">
-        {/* Header */}
-        <div className="flex items-center justify-between max-w-6xl mx-auto">
-          <div className="flex items-center gap-2">
-            {/* Session ID display */}
-            {/* <div className="text-xs text-gray-500 bg-gray-100 px-2 py-1 rounded">
+      {/* Main content area - scrollable */}
+      <div className="flex-1 overflow-y-auto">
+        <div className="p-6 w-full mx-auto pb-32">
+          {" "}
+          {/* Added bottom padding for fixed input */}
+          {/* Header */}
+          <div className="flex items-center justify-between max-w-6xl mx-auto">
+            <div className="flex items-center gap-2">
+              {/* Session ID display */}
+              {/* <div className="text-xs text-gray-500 bg-gray-100 px-2 py-1 rounded">
               Session: {sessionId.split('_')[1]?.slice(0, 8)}...
             </div> */}
 
-            {/* Streaming toggle */}
-            <button
-              onClick={() => setStreamingEnabled(!streamingEnabled)}
-              className={`text-xs px-2 py-1 rounded transition-colors ${
-                streamingEnabled
-                  ? "bg-green-100 text-green-700 border border-green-200 w-[80px]"
-                  : "bg-gray-100 text-gray-600 border border-gray-200 w-[80px]"
-              }`}
-              title={streamingEnabled ? "Streaming ON" : "Streaming OFF"}
-            >
-              <Zap className="w-3 h-3 inline mr-1" />
-              {streamingEnabled ? "Stream" : "Regular"}
-            </button>
-          </div>
-
-          <div className="flex items-center gap-4">
-            {/* Autosave Status */}
-            {!sessionMode && currentProjectId && (
-              <AutosaveStatus
-                isSaving={isSaving}
-                lastSaved={lastSaved}
-                saveError={saveError}
-                hasUnsavedChanges={hasUnsavedChanges}
-                onManualSave={saveNow}
-                className="text-xs"
-              />
-            )}
-
-            {/* Memory Manager */}
-            <button
-              onClick={() => setShowMemoryManager(true)}
-              className="p-2 rounded-md hover:bg-gray-100 transition-colors"
-              title="Memory Management"
-            >
-              <Brain className="w-5 h-5 text-primary" />
-            </button>
-
-            {/* Conversations Icon */}
-            <button
-              onClick={() => setShowConversationsModal(true)}
-              className="p-2 rounded-md hover:bg-gray-100 transition-colors"
-              title="View Conversations"
-            >
-              <MessageSquare className="w-6 h-6 text-primary" />
-            </button>
-          </div>
-        </div>
-
-        {/* Error Display */}
-        {error && (
-          <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-md max-w-6xl mx-auto">
-            <p className="text-sm text-red-700">{error}</p>
-          </div>
-        )}
-
-        {/* Chat Messages or Welcome Screen */}
-        {currentConversation && currentConversation.messages.length > 0 ? (
-          <div className="space-y-6 mt-8 scrollable-container optimized-text max-w-6xl mx-auto">
-            {currentConversation.messages.map((message: any) => (
-              <div
-                key={message.id}
-                className={`px-4 py-3 text-sm `}
+              {/* Streaming toggle */}
+              <button
+                onClick={() => setStreamingEnabled(!streamingEnabled)}
+                className={`text-xs px-2 py-1 rounded transition-colors ${
+                  streamingEnabled
+                    ? "bg-green-100 text-green-700 border border-green-200 w-[80px]"
+                    : "bg-gray-100 text-gray-600 border border-gray-200 w-[80px]"
+                }`}
+                title={streamingEnabled ? "Streaming ON" : "Streaming OFF"}
               >
-                <div className="flex items-start gap-3">
-                  <div
-                    className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-medium shrink-0 ${
-                      message.role === "user"
-                        ? "bg-gray-300 text-gray-700"
-                        : "bg-black text-white"
-                    }`}
-                  >
-                    {message.role === "user" ? "You" : "P"}
-                  </div>
-                  <div className="flex-1">
-                    <div className="text-gray-800 prose prose-sm max-w-none">
-                      {message.isStreaming && !message.content ? (
-                        <div className="flex items-center gap-2 text-gray-600">
-                          <TypingIndicator />
-                          <span className="text-xs">Thinking...</span>
-                        </div>
-                      ) : message.content ? (
-                        <div className="relative">
-                          <ReactMarkdown>{message.content}</ReactMarkdown>
-                          {message.isStreaming && (
-                            <span className="inline-block w-2 h-4 bg-blue-500 ml-1 animate-pulse"></span>
-                          )}
-                        </div>
-                      ) : (
-                        <ReactMarkdown>{message.content}</ReactMarkdown>
-                      )}
-                    </div>
+                <Zap className="w-3 h-3 inline mr-1" />
+                {streamingEnabled ? "Stream" : "Regular"}
+              </button>
+            </div>
 
-                    {/* Show completion indicator for recently completed streams */}
-                    {!message.isStreaming && message.content && streamComplete && currentConversation?.messages[currentConversation.messages.length - 1]?.id === message.id && (
-                      <div className="flex items-center gap-2 mt-2 text-xs text-green-600">
-                        <div className="w-2 h-2 bg-green-500 rounded-full"></div>
-                        <span>Response complete</span>
-                      </div>
-                    )}
+            <div className="flex items-center gap-4">
+              {/* Autosave Status */}
+              {!sessionMode && currentProjectId && (
+                <AutosaveStatus
+                  isSaving={isSaving}
+                  lastSaved={lastSaved}
+                  saveError={saveError}
+                  hasUnsavedChanges={hasUnsavedChanges}
+                  onManualSave={saveNow}
+                  className="text-xs"
+                />
+              )}
 
-                    {/* Render artifacts if present */}
-                    {message.artifacts && (
-                      <div className="mt-4 space-y-3">
-                        {/* Code artifacts */}
-                        {message.artifacts.code.map((artifact: any, index: number) => (
-                          <CodeArtifactViewer
-                            key={index}
-                            artifact={artifact}
-                            onSaveToProject={() => {
-                              // Handle save to project
-                              console.log('Save to project:', artifact);
-                            }}
-                            onMoveToLogicStudio={() => {
-                              navigate("/logic-studio");
-                            }}
-                          />
-                        ))}
+              {/* Memory Manager */}
+              <button
+                onClick={() => setShowMemoryManager(true)}
+                className="p-2 rounded-md hover:bg-gray-100 transition-colors"
+                title="Memory Management"
+              >
+                <Brain className="w-5 h-5 text-primary" />
+              </button>
 
-                        {/* Table artifacts */}
-                        {message.artifacts.tables.map((artifact: any, index: number) => (
-                          <TableArtifactViewer key={index} artifact={artifact} />
-                        ))}
-
-                        {/* Action buttons for artifacts */}
-                        {message.artifacts.tables.length > 0 && (
-                          <div className="flex gap-2 pt-2">
-                            <button
-                              onClick={() => navigate("/tag-database")}
-                              className="bg-white border border-light px-3 py-1 rounded text-xs hover:bg-accent-light transition-colors flex items-center gap-1"
-                            >
-                              <Database className="w-3 h-3" />
-                              Generate Tag Database
-                            </button>
-                          </div>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                </div>
-              </div>
-            ))}
-
-            {/* Loading indicator with typing dots */}
-            {(isLoading || uploadingFiles) && !isStreaming && (
-              <div className="px-4 py-3 text-sm bg-gray-50">
-                <div className="flex items-start gap-3">
-                  <div className="w-8 h-8 bg-primary rounded-full flex items-center justify-center text-xs font-medium text-white shrink-0">
-                    <img
-                      src={pandauraLogo}
-                      alt="Pandaura"
-                      className="w-5 h-5 rounded-full object-cover"
-                    />
-                  </div>
-                  <div className="flex-1">
-                    <div className="flex items-center gap-3 text-gray-600">
-                      <TypingIndicator />
-                      <span className="text-xs">
-                        {uploadingFiles ? "Processing files..." : "Thinking..."}
-                      </span>
-                    </div>
-                    <div className="text-xs text-gray-500 mt-1">
-                      {uploadingFiles
-                        ? "� Analyzing uploaded documents and images"
-                        : "�💡 Complex automation tasks may take a moment to process"}
-                    </div>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            <div ref={messagesEndRef} />
-          </div>
-        ) : (
-          /* Welcome Screen */
-          <div className="text-muted mt-4 px-6 flex flex-col items-center text-center max-w-6xl mx-auto">
-            <img
-              src={pandauraLogo}
-              alt="Pandaura Logo"
-              className="h-24 w-auto mb-4 filter-none"
-              style={{ filter: "none", imageRendering: "crisp-edges" }}
-            />
-            <h2 className="text-lg font-semibold text-primary">
-              Ask Pandaura Anything
-            </h2>
-            <p className="text-sm">
-              Start a conversation with Pandaura or upload a document to begin.
-            </p>
-
-            {/* Persistence indicator */}
-            {conversations.length > 0 && (
-              <div className="mt-2 text-xs text-green-600 bg-green-50 px-2 py-1 rounded border">
-                💾 {conversations.length} conversation
-                {conversations.length !== 1 ? "s" : ""} saved locally
-              </div>
-            )}
-
-            {/* Sample questions */}
-            <div className="mt-6 grid grid-cols-1 md:grid-cols-2 gap-3 w-full max-w-4xl">
-              <p className="col-span-full text-xs font-medium text-gray-600 mb-2 text-left">
-                Try asking:
-              </p>
-              {[
-                "Create a motor starter logic with safety interlocks",
-                "Generate tag database for a conveyor system",
-                "Help me with TIA Portal configuration",
-                "Design SCADA screens for process monitoring",
-              ].map((question, index) => (
-                <button
-                  key={index}
-                  onClick={() => setChatMessage(question)}
-                  className="text-left p-3 text-sm text-gray-700 bg-gray-50 hover:bg-gray-100 rounded border transition-colors"
-                >
-                  {question}
-                </button>
-              ))}
+              {/* Conversations Icon */}
+              <button
+                onClick={() => setShowConversationsModal(true)}
+                className="p-2 rounded-md hover:bg-gray-100 transition-colors"
+                title="View Conversations"
+              >
+                <MessageSquare className="w-6 h-6 text-primary" />
+              </button>
             </div>
           </div>
-        )}
+          {/* Error Display */}
+          {error && (
+            <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-md max-w-6xl mx-auto">
+              <p className="text-sm text-red-700">{error}</p>
+            </div>
+          )}
+          {/* Chat Messages or Welcome Screen */}
+          {currentConversation && currentConversation.messages.length > 0 ? (
+            <div className="space-y-6 mt-8 mb-8 max-w-6xl mx-auto">
+              {currentConversation.messages.map((message: any) => (
+                <div key={message.id} className={`px-4 py-3 text-sm `}>
+                  <div className="flex items-start gap-3">
+                    {message.role === "user" ? (
+                      <div
+                        className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-medium shrink-0 bg-gray-300 text-gray-700`}
+                      >You</div>
+                    ) : (
+                      <img
+                        src={pandauraLogo}
+                        alt="Pandaura"
+                        className="w-8 h-8 rounded-full object-cover"
+                      />
+                    )}
+
+                    <div className="flex-1">
+                      <div className="text-gray-800 prose prose-sm max-w-none">
+                        {message.isStreaming && !message.content ? (
+                          <div className="flex items-center gap-2 text-gray-600">
+                            <TypingIndicator />
+                            <span className="text-xs">Thinking...</span>
+                          </div>
+                        ) : message.content ? (
+                          <div className="relative">
+                            <ReactMarkdown>{cleanMessageContent(message.content)}</ReactMarkdown>
+                            {message.isStreaming && (
+                              <span className="inline-block w-2 h-4 bg-blue-500 ml-1 animate-pulse"></span>
+                            )}
+                          </div>
+                        ) : (
+                          <ReactMarkdown>{cleanMessageContent(message.content || "")}</ReactMarkdown>
+                        )}
+                      </div>
+
+                      {/* Show completion indicator for recently completed streams */}
+                      {!message.isStreaming &&
+                        message.content &&
+                        streamComplete &&
+                        currentConversation?.messages[
+                          currentConversation.messages.length - 1
+                        ]?.id === message.id && (
+                          <div className="flex items-center gap-2 mt-2 text-xs text-green-600">
+                            <div className="w-2 h-2 bg-green-500 rounded-full"></div>
+                            <span>Response complete</span>
+                          </div>
+                        )}
+
+                      {/* Render full response if it's a complete AI response with meaningful artifacts */}
+                      {message.role === "assistant" && 
+                       message.artifacts && 
+                       (() => {
+                         // Debug logging to help troubleshoot
+                         console.log("Message artifacts:", message.artifacts);
+                         console.log("Code artifacts:", message.artifacts.code);
+                         console.log("Table artifacts:", message.artifacts.tables);
+                         return (
+                           // Only show WrapperAResponseViewer if there are actual meaningful artifacts
+                           (message.artifacts.code && message.artifacts.code.length > 0) || 
+                           (message.artifacts.tables && message.artifacts.tables.length > 0) || 
+                           message.artifacts.diff ||
+                           (message.artifacts.reports && message.artifacts.reports.length > 0)
+                         );
+                       })() && (
+                        <div className="mt-4">
+                          <WrapperAResponseViewer
+                            response={{
+                              status: "ok" as const,
+                              task_type:
+                                message.wrapperType === "B"
+                                  ? ("doc_qa" as const)
+                                  : ("code_gen" as const),
+                              assumptions: message.artifacts.assumptions || [],
+                              answer_md: "", // Content is already displayed above
+                              artifacts: {
+                                code: message.artifacts.code || [],
+                                tables: message.artifacts.tables || [],
+                                citations: message.artifacts.citations || [],
+                                diff: message.artifacts.diff,
+                                reports: message.artifacts.reports || [],
+                                anchors: message.artifacts.anchors || [],
+                              },
+                              next_actions: [], // Remove next_actions to prevent "Next step" text
+                              errors: message.artifacts.errors || [],
+                              processed_files: message.processedFiles,
+                            }}
+                            onSaveToProject={() => {
+                              // Handle save to project
+                            }}
+                            onMoveToLogicStudio={() => {
+                              // Handle move to Logic Studio
+                            }}
+                          />
+                        </div>
+                       )}
+
+                      {/* Legacy inline artifacts rendering (fallback) - only if meaningful artifacts exist */}
+                      {message.artifacts && 
+                       !message.artifacts.next_actions && 
+                       (
+                         (message.artifacts.code && message.artifacts.code.length > 0) ||
+                         (message.artifacts.tables && message.artifacts.tables.length > 0)
+                       ) && (
+                        <div className="mt-4 space-y-3">
+                          {/* Code artifacts */}
+                          {message.artifacts.code && message.artifacts.code.map(
+                            (artifact: any, index: number) => (
+                              <CodeArtifactViewer
+                                key={index}
+                                artifact={artifact}
+                                onSaveToProject={() => {
+                                  // Handle save to project
+                                  console.log("Save to project:", artifact);
+                                }}
+                                onMoveToLogicStudio={() => {
+                                  navigate("/logic-studio");
+                                }}
+                              />
+                            )
+                          )}
+
+                          {/* Table artifacts */}
+                          {message.artifacts.tables && message.artifacts.tables.map(
+                            (artifact: any, index: number) => (
+                              <TableArtifactViewer
+                                key={index}
+                                artifact={artifact}
+                              />
+                            )
+                          )}
+
+                          {/* Action buttons for artifacts */}
+                          {message.artifacts.tables && message.artifacts.tables.length > 0 && (
+                            <div className="flex gap-2 pt-2">
+                              <button
+                                onClick={() => navigate("/tag-database")}
+                                className="bg-white border border-light px-3 py-1 rounded text-xs hover:bg-accent-light transition-colors flex items-center gap-1"
+                              >
+                                <Database className="w-3 h-3" />
+                                Generate Tag Database
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              ))}
+
+              {/* Loading indicator with typing dots */}
+              {(isLoading || uploadingFiles) && !isStreaming && (
+                <div className="px-4 py-3 text-sm bg-gray-50">
+                  <div className="flex items-start gap-3">
+                    <div className="w-8 h-8 bg-primary rounded-full flex items-center justify-center text-xs font-medium text-white shrink-0">
+                      <img
+                        src={pandauraLogo}
+                        alt="Pandaura"
+                        className="w-5 h-5 rounded-full object-cover"
+                      />
+                    </div>
+                    <div className="flex-1">
+                      <div className="flex items-center gap-3 text-gray-600">
+                        <TypingIndicator />
+                        <span className="text-xs">
+                          {uploadingFiles
+                            ? "Processing files..."
+                            : "Thinking..."}
+                        </span>
+                      </div>
+                      <div className="text-xs text-gray-500 mt-1">
+                        {uploadingFiles
+                          ? "Analyzing uploaded documents"
+                          : "💡 Complex automation tasks may take a moment to process"}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              <div ref={messagesEndRef} />
+            </div>
+          ) : (
+            /* Welcome Screen */
+            <div className="text-muted mt-4 px-6 flex flex-col items-center text-center max-w-6xl mx-auto">
+              <img
+                src={logo}
+                alt="Pandaura Logo"
+                className="h-24 w-auto mb-4 filter-none"
+                style={{ filter: "none", imageRendering: "crisp-edges" }}
+              />
+              <h2 className="text-lg font-semibold text-primary">
+                Ask Pandaura Anything
+              </h2>
+              <p className="text-sm">
+                Start a conversation with Pandaura or upload a document to
+                begin.
+              </p>
+
+              {/* Persistence indicator */}
+              {conversations.length > 0 && (
+                <div className="mt-2 text-xs text-green-600 bg-green-50 px-2 py-1 rounded border">
+                  💾 {conversations.length} conversation
+                  {conversations.length !== 1 ? "s" : ""} saved locally
+                </div>
+              )}
+
+              {/* Sample questions */}
+              <div className="mt-6 grid grid-cols-1 md:grid-cols-2 gap-3 w-full max-w-4xl">
+                <p className="col-span-full text-xs font-medium text-gray-600 mb-2 text-left">
+                  Try asking{" "}
+                  {selectedWrapper === "A"
+                    ? "(Code Generator)"
+                    : "(Document Analyst)"}
+                  :
+                </p>
+                {(selectedWrapper === "A"
+                  ? [
+                      "Create a motor starter logic with safety interlocks",
+                      "Generate tag database for a conveyor system",
+                    ]
+                  : [
+                      "Upload and analyze my PLC project files",
+                      "Extract tag information from this documentation",
+                      "Review this safety program for compliance",
+                      "Summarize the I/O configuration from these files",
+                    ]
+                ).map((question, index) => (
+                  <button
+                    key={`${selectedWrapper}-${index}`}
+                    onClick={() => setChatMessage(question)}
+                    className="text-left p-3 text-sm text-gray-700 bg-gray-50 hover:bg-gray-100 rounded border transition-colors"
+                  >
+                    {question}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+        {/* End of scrollable area */}
       </div>
 
       {/* Fixed Bottom Input */}
@@ -883,25 +1030,55 @@ export default function AskPandaura({ sessionMode = false }: AskPandauraProps) {
         {/* Selected Files Indicator */}
         {selectedFiles.length > 0 && (
           <div className="mb-3 max-w-6xl mx-auto">
-            <div className="flex items-center gap-2 bg-blue-50 border border-blue-200 rounded-md px-3 py-2">
+            <div
+              className={`flex items-center gap-2 rounded-md px-3 py-2 ${
+                selectedWrapper === "A"
+                  ? "bg-amber-50 border border-amber-200"
+                  : "bg-blue-50 border border-blue-200"
+              }`}
+            >
               <div className="flex items-center gap-2 flex-1">
-                {selectedFiles.some(
-                  (f) => aiService.getFileTypeCategory(f) === "image"
-                ) && <Image className="w-4 h-4 text-blue-600" />}
-                {selectedFiles.some(
-                  (f) => aiService.getFileTypeCategory(f) === "document"
-                ) && <FileText className="w-4 h-4 text-blue-600" />}
-                <span className="text-sm text-blue-700 font-medium">
-                  {selectedFiles.length} file
-                  {selectedFiles.length > 1 ? "s" : ""} selected
-                </span>
-                <div className="text-xs text-blue-600 max-w-md truncate">
-                  ({selectedFiles.map((f) => f.name).join(", ")})
-                </div>
+                {selectedWrapper === "A" ? (
+                  <>
+                    <AlertCircle className="w-4 h-4 text-amber-600" />
+                    <span className="text-sm text-amber-700 font-medium">
+                      Files not supported in Code Generator mode
+                    </span>
+                  </>
+                ) : (
+                  <>
+                    {selectedFiles.some(
+                      (f) =>
+                        aiService.getFileTypeCategory(f, selectedWrapper) ===
+                        "image"
+                    ) && <Image className="w-4 h-4 text-blue-600" />}
+                    {selectedFiles.some(
+                      (f) =>
+                        aiService.getFileTypeCategory(f, selectedWrapper) ===
+                        "document"
+                    ) && <FileText className="w-4 h-4 text-blue-600" />}
+                    {selectedFiles.some(
+                      (f) =>
+                        aiService.getFileTypeCategory(f, selectedWrapper) ===
+                        "plc"
+                    ) && <Settings className="w-4 h-4 text-green-600" />}
+                    <span className="text-sm text-blue-700 font-medium">
+                      {selectedFiles.length} file
+                      {selectedFiles.length > 1 ? "s" : ""} selected
+                    </span>
+                    <div className="text-xs text-blue-600 max-w-md truncate">
+                      ({selectedFiles.map((f) => f.name).join(", ")})
+                    </div>
+                  </>
+                )}
               </div>
               <button
                 onClick={clearSelectedFiles}
-                className="text-blue-600 hover:text-blue-800 flex items-center gap-1 text-xs"
+                className={`hover:opacity-80 flex items-center gap-1 text-xs ${
+                  selectedWrapper === "A"
+                    ? "text-amber-600 hover:text-amber-800"
+                    : "text-blue-600 hover:text-blue-800"
+                }`}
                 title="Clear all files"
               >
                 <X className="w-3 h-3" />
@@ -910,6 +1087,98 @@ export default function AskPandaura({ sessionMode = false }: AskPandauraProps) {
             </div>
           </div>
         )}
+
+        {/* Wrapper Selection */}
+        <div className="mb-3 max-w-6xl mx-auto">
+          <div className="flex items-center gap-4">
+            <div className="flex items-center gap-2">
+              <label className="text-sm font-medium text-gray-700">
+                AI Mode:
+              </label>
+              <div className="flex rounded-md border border-gray-300 overflow-hidden">
+                <button
+                  onClick={() => {
+                    setSelectedWrapper("A");
+                    // Clear selected files when switching to Code Generator
+                    if (selectedFiles.length > 0) {
+                      setSelectedFiles([]);
+                    }
+                  }}
+                  className={`px-3 py-1 text-sm font-medium transition-colors ${
+                    selectedWrapper === "A"
+                      ? "bg-black text-white"
+                      : "bg-white text-gray-700 hover:bg-gray-50"
+                  }`}
+                >
+                  <div className="flex items-center gap-1">
+                    <Code className="w-3 h-3" />
+                    Code Generator
+                  </div>
+                </button>
+                <button
+                  onClick={() => setSelectedWrapper("B")}
+                  className={`px-3 py-1 text-sm font-medium transition-colors ${
+                    selectedWrapper === "B"
+                      ? "bg-black text-white"
+                      : "bg-white text-gray-700 hover:bg-gray-50"
+                  }`}
+                >
+                  <div className="flex items-center gap-1">
+                    <Brain className="w-3 h-3" />
+                    Doc Analyst
+                  </div>
+                </button>
+              </div>
+            </div>
+
+            <button
+              onClick={() => setShowWrapperInfo(!showWrapperInfo)}
+              className="text-xs text-gray-500 hover:text-gray-700 transition-colors"
+            >
+              ℹ️ What's the difference?
+            </button>
+          </div>
+
+          {/* Wrapper Info Panel */}
+          {showWrapperInfo && (
+            <div className="mt-3 p-3 bg-gray-50 border border-gray-200 rounded-md text-xs">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <h4 className="font-semibold text-blue-600 mb-1 flex items-center gap-1">
+                    <Code className="w-3 h-3" />
+                    Code Generator (A)
+                  </h4>
+                  <p className="text-gray-600 mb-2">
+                    Generates PLC code, logic, and automation solutions. Best
+                    for:
+                  </p>
+                  <ul className="text-gray-600 space-y-1">
+                    <li>• Creating new PLC programs</li>
+                    <li>• Logic design and optimization</li>
+                    <li>• Tag databases and HMI screens</li>
+                    <li>• Code review and debugging</li>
+                  </ul>
+                </div>
+                <div>
+                  <h4 className="font-semibold text-green-600 mb-1 flex items-center gap-1">
+                    <Brain className="w-3 h-3" />
+                    Document Analyst (B)
+                  </h4>
+                  <p className="text-gray-600 mb-2">
+                    Analyzes PLC projects, documentation, and technical files.
+                    Best for:
+                  </p>
+                  <ul className="text-gray-600 space-y-1">
+                    <li>• Analyzing existing PLC projects (.xml, .l5x, .st)</li>
+                    <li>• Extracting information from technical docs</li>
+                    <li>• Safety system analysis</li>
+                    <li>• Project documentation review</li>
+                  </ul>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
 
         <div className="flex items-end gap-3 max-w-6xl mx-auto">
           {/* Wider max width for full use of space */}
@@ -923,9 +1192,13 @@ export default function AskPandaura({ sessionMode = false }: AskPandauraProps) {
               }
             }}
             placeholder={
-              selectedFiles.length > 0
+              selectedWrapper === "A"
+                ? selectedFiles.length > 0
+                  ? "Files are not supported in Code Generator mode. Switch to Document Analyst or clear files."
+                  : "Ask about PLCs, SCADA, HMI, robotics, motor control, or request code generation..."
+                : selectedFiles.length > 0
                 ? "Ask about the uploaded files or add additional instructions..."
-                : "Ask about PLCs, SCADA, HMI, robotics, motor control, or upload documents..."
+                : "Upload PLC files, documents, or images for analysis..."
             }
             className="flex-1 border border-light rounded-md px-4 py-3 bg-surface shadow-sm text-sm text-primary placeholder-muted resize-none focus:outline-none focus:ring-2 focus:ring-accent focus:border-accent transition-all min-h-[44px] max-h-[120px]"
             rows={1}
@@ -945,13 +1218,17 @@ export default function AskPandaura({ sessionMode = false }: AskPandauraProps) {
                 onChange={(e) => {
                   const files = Array.from(e.target.files || []);
                   if (files.length > 0) {
-                    // Validate file types
+                    // Validate file types based on selected wrapper
                     const validFiles = files.filter((file) =>
-                      aiService.isFileSupported(file)
+                      aiService.isFileSupported(file, selectedWrapper)
                     );
                     if (validFiles.length !== files.length) {
+                      const supportedTypes =
+                        selectedWrapper === "A"
+                          ? "images (PNG, JPG, GIF) or documents (PDF, DOC, TXT, CSV, XLS, PPT)"
+                          : "PLC files (.xml, .l5x, .st, .zip), documents (PDF, DOC, TXT, CSV), or images";
                       setError(
-                        "Some files are not supported. Please use images (PNG, JPG, GIF) or documents (PDF, DOC, TXT, CSV, XLS, PPT)."
+                        `Some files are not supported. Please use ${supportedTypes}.`
                       );
                     }
                     if (validFiles.length > 0) {
@@ -964,17 +1241,37 @@ export default function AskPandaura({ sessionMode = false }: AskPandauraProps) {
                 }}
                 className="hidden"
                 id="file-upload"
-                disabled={isLoading || isStreaming || uploadingFiles}
+                disabled={
+                  selectedWrapper === "A" ||
+                  isLoading ||
+                  isStreaming ||
+                  uploadingFiles
+                }
               />
               <button
-                onClick={() => document.getElementById("file-upload")?.click()}
+                onClick={() =>
+                  selectedWrapper === "B"
+                    ? document.getElementById("file-upload")?.click()
+                    : null
+                }
                 className={`border p-3 rounded-md transition-colors shadow-sm relative ${
-                  selectedFiles.length > 0
+                  selectedWrapper === "A"
+                    ? "bg-gray-100 border-gray-300 text-gray-400 cursor-not-allowed"
+                    : selectedFiles.length > 0
                     ? "bg-blue-100 border-blue-300 text-blue-600"
                     : "bg-white border-light text-primary hover:bg-accent-light"
                 }`}
-                title="Upload documents or images"
-                disabled={isLoading || isStreaming || uploadingFiles}
+                title={
+                  selectedWrapper === "A"
+                    ? "File upload is disabled for Code Generator mode"
+                    : "Upload PLC files, documents, or images"
+                }
+                disabled={
+                  selectedWrapper === "A" ||
+                  isLoading ||
+                  isStreaming ||
+                  uploadingFiles
+                }
               >
                 <UploadCloud className="w-4 h-4" />
                 {selectedFiles.length > 0 && (

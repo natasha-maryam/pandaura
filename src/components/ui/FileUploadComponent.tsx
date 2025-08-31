@@ -8,13 +8,14 @@ interface FileUploadComponentProps {
   maxFiles?: number;
   disabled?: boolean;
   className?: string;
+  wrapperType?: 'A' | 'B'; // Add wrapper type prop
 }
 
 interface FilePreview {
   file: File;
   id: string;
   preview?: string;
-  category: 'image' | 'document' | 'unsupported';
+  category: 'image' | 'document' | 'plc' | 'unsupported';
 }
 
 export default function FileUploadComponent({
@@ -23,6 +24,7 @@ export default function FileUploadComponent({
   maxFiles = 10,
   disabled = false,
   className = '',
+  wrapperType = 'A', // Default to wrapper A
 }: FileUploadComponentProps) {
   const [files, setFiles] = useState<FilePreview[]>([]);
   const [isDragOver, setIsDragOver] = useState(false);
@@ -32,7 +34,7 @@ export default function FileUploadComponent({
   const generateFileId = () => `file_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
 
   const createFilePreview = (file: File): FilePreview => {
-    const category = aiService.getFileTypeCategory(file);
+    const category = aiService.getFileTypeCategory(file, wrapperType);
     const filePreview: FilePreview = {
       file,
       id: generateFileId(),
@@ -54,7 +56,7 @@ export default function FileUploadComponent({
 
   const handleFilesChange = (selectedFiles: FileList | File[]) => {
     const fileArray = Array.from(selectedFiles);
-    const validFiles = fileArray.filter(file => aiService.isFileSupported(file));
+    const validFiles = fileArray.filter(file => aiService.isFileSupported(file, wrapperType));
     
     if (validFiles.length !== fileArray.length) {
       console.warn('Some files were rejected due to unsupported format');
@@ -126,6 +128,8 @@ export default function FileUploadComponent({
         return <Image className="w-4 h-4" />;
       case 'document':
         return <FileText className="w-4 h-4" />;
+      case 'plc':
+        return <FileText className="w-4 h-4" />;
       default:
         return <AlertCircle className="w-4 h-4" />;
     }
@@ -137,6 +141,8 @@ export default function FileUploadComponent({
         return 'text-green-600 bg-green-50 border-green-200';
       case 'document':
         return 'text-blue-600 bg-blue-50 border-blue-200';
+      case 'plc':
+        return 'text-purple-600 bg-purple-50 border-purple-200';
       default:
         return 'text-red-600 bg-red-50 border-red-200';
     }

@@ -14,6 +14,11 @@ export const CodeArtifactViewer: React.FC<Props> = ({
   onSaveToProject,
   onMoveToLogicStudio,
 }) => {
+  // Don't render if there's no actual code content
+  if (!artifact || !artifact.content || artifact.content.trim().length === 0) {
+    return null;
+  }
+
   return (
     <Card className="my-4">
       <div className="flex justify-between items-center mb-2">

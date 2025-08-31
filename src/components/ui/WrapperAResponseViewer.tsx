@@ -16,9 +16,21 @@ export const WrapperAResponseViewer: React.FC<Props> = ({
   onSaveToProject,
   onMoveToLogicStudio,
 }) => {
+  // Check if there are meaningful artifacts that warrant showing the full viewer
+  const hasMeaningfulArtifacts = 
+    response.artifacts.code.length > 0 ||
+    response.artifacts.tables.length > 0 ||
+    response.artifacts.diff ||
+    (response.artifacts.reports && response.artifacts.reports.length > 0);
+
+  // Don't render anything if there are no meaningful artifacts
+  if (!hasMeaningfulArtifacts) {
+    return null;
+  }
+
   return (
     <div className="space-y-4">
-      {/* Status and Task Type */}
+      {/* Status and Task Type - Only show for meaningful artifacts */}
       <div className="flex gap-2">
         <span className={`px-2 py-1 rounded text-sm ${
           response.status === 'ok'
@@ -65,10 +77,35 @@ export const WrapperAResponseViewer: React.FC<Props> = ({
         />
       ))}
 
-      {/* Table Artifacts */}
-      {response.artifacts.tables.map((artifact, index) => (
+      {/* Table Artifacts - Only show for non-doc_qa tasks to avoid duplication */}
+      {response.task_type !== 'doc_qa' && response.artifacts.tables.map((artifact, index) => (
         <TableArtifactViewer key={index} artifact={artifact} />
       ))}
+
+      {/* Report Artifacts (Wrapper B) */}
+      {response.artifacts.reports && response.artifacts.reports.map((report: any, index: number) => (
+        <Card key={index}>
+          <h3 className="font-semibold mb-2">{report.title}</h3>
+          <div className="prose max-w-none">
+            <ReactMarkdown>{report.content_md}</ReactMarkdown>
+          </div>
+        </Card>
+      ))}
+
+      {/* Anchors (Wrapper B) */}
+      {response.artifacts.anchors && response.artifacts.anchors.length > 0 && (
+        <Card>
+          <h3 className="font-semibold mb-2">Document References</h3>
+          <ul className="list-disc list-inside space-y-1">
+            {response.artifacts.anchors.map((anchor: any, index: number) => (
+              <li key={index} className="text-sm text-gray-600">
+                <strong>{anchor.file}</strong>
+                {anchor.page && ` (page ${anchor.page})`}: {anchor.note}
+              </li>
+            ))}
+          </ul>
+        </Card>
+      )}
 
       {/* Diff View */}
       {response.artifacts.diff && (
@@ -107,6 +144,29 @@ export const WrapperAResponseViewer: React.FC<Props> = ({
               </li>
             ))}
           </ul>
+        </Card>
+      )}
+
+      {/* Processed Files (Wrapper B) */}
+      {response.processed_files && response.processed_files.length > 0 && (
+        <Card>
+          <h3 className="font-semibold mb-2">Processed Files</h3>
+          <div className="space-y-2">
+            {response.processed_files.map((file: any, index: number) => (
+              <div key={index} className="flex justify-between items-center p-2 bg-gray-50 rounded">
+                <div>
+                  <span className="font-medium text-sm">{file.filename}</span>
+                  <span className="text-xs text-gray-500 ml-2">({(file.size / 1024).toFixed(1)} KB)</span>
+                </div>
+                <div className="flex gap-2 text-xs">
+                  <span className="bg-blue-100 text-blue-800 px-2 py-1 rounded">{file.type}</span>
+                  {file.extracted_data_available && (
+                    <span className="bg-green-100 text-green-800 px-2 py-1 rounded">Data Extracted</span>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
         </Card>
       )}
 
