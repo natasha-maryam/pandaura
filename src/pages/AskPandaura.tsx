@@ -43,14 +43,28 @@ export default function AskPandaura({ sessionMode = false }: AskPandauraProps) {
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   // Helper function to clean message content
-  const cleanMessageContent = (content: string): string => {
+  const cleanMessageContent = (content: string, message?: any): string => {
     if (!content) return content;
+    
+    let cleanedContent = content;
+    
     // Remove "Next step →" sentences and any content after it
     // Handle various formats: "Next step →", "Next step:", "Next step -"
-    return content
+    cleanedContent = cleanedContent
       .replace(/Next step[→:\-] .*/gi, '')
       .replace(/Next step → .*/gi, '')
       .trim();
+    
+    // For Wrapper B messages with backend table artifacts, remove markdown tables to avoid duplication
+    if (message && 
+        message.wrapperType === 'B' && 
+        message.artifacts && 
+        message.artifacts.tables && 
+        message.artifacts.tables.length > 0) {
+      cleanedContent = removeMarkdownTables(cleanedContent);
+    }
+    
+    return cleanedContent;
   };
 
   // Get persisted state or use defaults
@@ -250,7 +264,158 @@ export default function AskPandaura({ sessionMode = false }: AskPandauraProps) {
         setUploadingFiles(true);
         
         if (selectedWrapper === 'B') {
-          // Use Wrapper B for document analysis
+          // Use Wrapper B for document analysis with streaming support
+          if (streamingEnabled) {
+            setIsStreaming(true);
+            let finalStreamContent = '';
+            
+            // Add a placeholder streaming message immediately
+            const streamingMessageId = generateMessageId();
+            const streamingMessage: AIMessage = {
+              id: streamingMessageId,
+              role: 'assistant',
+              content: '',
+              timestamp: new Date(),
+              isStreaming: true,
+              wrapperType: 'B',
+            };
+
+            const conversationWithStreaming = {
+              ...updatedConversation,
+              messages: [...updatedConversation.messages, streamingMessage],
+              updatedAt: new Date(),
+            };
+            setCurrentConversation(conversationWithStreaming);
+            setConversations(prev => 
+              prev.map(conv => conv.id === conversation!.id ? conversationWithStreaming : conv)
+            );
+            
+            const fullResponse = await aiService.sendWrapperBStreamingMessage(
+              {
+                prompt: userMessage,
+                projectId: projectId || undefined,
+                sessionId,
+                files: selectedFiles,
+                stream: true,
+              },
+              (chunk: StreamChunk) => {
+                if (chunk.type === 'status') {
+                  // Show status updates for file processing
+                  setCurrentConversation(prevConv => {
+                    if (!prevConv) return prevConv;
+                    const updatedMessages = prevConv.messages.map(msg => 
+                      msg.id === streamingMessageId 
+                        ? { ...msg, content: `*${chunk.content}*` }
+                        : msg
+                    );
+                    return { ...prevConv, messages: updatedMessages };
+                  });
+                } else if (chunk.type === 'start') {
+                  // Clear status and start streaming content
+                  setCurrentConversation(prevConv => {
+                    if (!prevConv) return prevConv;
+                    const updatedMessages = prevConv.messages.map(msg => 
+                      msg.id === streamingMessageId 
+                        ? { ...msg, content: '' }
+                        : msg
+                    );
+                    return { ...prevConv, messages: updatedMessages };
+                  });
+                } else if (chunk.type === 'chunk' && chunk.content) {
+                  finalStreamContent += chunk.content;
+                  setCurrentConversation(prevConv => {
+                    if (!prevConv) return prevConv;
+                    const updatedMessages = prevConv.messages.map(msg => 
+                      msg.id === streamingMessageId 
+                        ? { ...msg, content: finalStreamContent }
+                        : msg
+                    );
+                    return { ...prevConv, messages: updatedMessages };
+                  });
+                } else if (chunk.type === 'complete' && chunk.fullResponse) {
+                  // Store the complete response data for artifacts
+                  finalStreamContent = chunk.answer || finalStreamContent;
+                  
+                  setCurrentConversation(prevConv => {
+                    if (!prevConv) return prevConv;
+                    const updatedMessages = prevConv.messages.map(msg => 
+                      msg.id === streamingMessageId 
+                        ? { 
+                            ...msg, 
+                            content: finalStreamContent,
+                            task_type: chunk.fullResponse.task_type,
+                            artifacts: chunk.fullResponse.artifacts,
+                            processedFiles: chunk.fullResponse.processed_files
+                          }
+                        : msg
+                    );
+                    return { ...prevConv, messages: updatedMessages };
+                  });
+                  setConversations(prev => 
+                    prev.map(conv => {
+                      if (conv.id === conversation!.id) {
+                        const updatedMessages = conv.messages.map(msg => 
+                          msg.id === streamingMessageId 
+                            ? { 
+                                ...msg, 
+                                content: finalStreamContent,
+                                task_type: chunk.fullResponse.task_type,
+                                artifacts: chunk.fullResponse.artifacts,
+                                processedFiles: chunk.fullResponse.processed_files
+                              }
+                            : msg
+                        );
+                        return { ...conv, messages: updatedMessages };
+                      }
+                      return conv;
+                    })
+                  );
+                } else if (chunk.type === 'end') {
+                  setIsStreaming(false);
+                  
+                  // Mark streaming as complete
+                  setCurrentConversation(prevConv => {
+                    if (!prevConv) return prevConv;
+                    const updatedMessages = prevConv.messages.map(msg => 
+                      msg.id === streamingMessageId 
+                        ? { ...msg, isStreaming: false }
+                        : msg
+                    );
+                    return { ...prevConv, messages: updatedMessages };
+                  });
+                  setConversations(prev => 
+                    prev.map(conv => {
+                      if (conv.id === conversation!.id) {
+                        const updatedMessages = conv.messages.map(msg => 
+                          msg.id === streamingMessageId 
+                            ? { ...msg, isStreaming: false }
+                            : msg
+                        );
+                        return { ...conv, messages: updatedMessages };
+                      }
+                      return conv;
+                    })
+                  );
+                } else if (chunk.type === 'error') {
+                  throw new Error(chunk.error || 'Streaming error');
+                }
+              }
+            );
+            
+            // Create response object for streaming (will be used later if needed)
+            response = {
+              status: 'ok' as const,
+              task_type: 'doc_qa' as const,
+              assumptions: [],
+              answer_md: finalStreamContent,
+              artifacts: { code: [], tables: [], reports: [], anchors: [], citations: [] },
+              next_actions: [],
+              errors: [],
+            };
+            
+            streamingHandled = true;
+          } else {
+            // Non-streaming Wrapper B
           const wrapperBResponse = await aiService.analyzeDocumentsWithWrapperB({
             prompt: userMessage,
             projectId: projectId || undefined,
@@ -270,6 +435,8 @@ export default function AskPandaura({ sessionMode = false }: AskPandauraProps) {
               extracted_data_available: f.extracted_data_available
             }));
           }
+          }
+          
           userMessageObj.wrapperType = 'B';
           
         } else {
@@ -541,6 +708,7 @@ export default function AskPandaura({ sessionMode = false }: AskPandauraProps) {
           content: finalMessageContent,
           timestamp: new Date(),
           wrapperType: selectedWrapper,
+          task_type: response.task_type, // Preserve task_type from backend
           artifacts,
         };
 
@@ -842,13 +1010,13 @@ export default function AskPandaura({ sessionMode = false }: AskPandauraProps) {
                           </div>
                         ) : message.content ? (
                           <div className="relative">
-                            <ReactMarkdown remarkPlugins={[remarkGfm]}>{cleanMessageContent(message.content)}</ReactMarkdown>
+                            <ReactMarkdown remarkPlugins={[remarkGfm]}>{cleanMessageContent(message.content, message)}</ReactMarkdown>
                             {message.isStreaming && (
                               <span className="inline-block w-2 h-4 bg-blue-500 ml-1 animate-pulse"></span>
                             )}
                           </div>
                         ) : (
-                          <ReactMarkdown remarkPlugins={[remarkGfm]}>{cleanMessageContent(message.content || "")}</ReactMarkdown>
+                          <ReactMarkdown remarkPlugins={[remarkGfm]}>{cleanMessageContent(message.content || "", message)}</ReactMarkdown>
                         )}
                       </div>
 
@@ -883,7 +1051,7 @@ export default function AskPandaura({ sessionMode = false }: AskPandauraProps) {
                               status: "ok" as const,
                               task_type:
                                 message.wrapperType === "B"
-                                  ? ("doc_qa" as const)
+                                  ? (message.task_type || "doc_qa" as const)
                                   : ("code_gen" as const),
                               assumptions: message.artifacts.assumptions || [],
                               answer_md: "", // Content is already displayed above

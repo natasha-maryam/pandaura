@@ -107,6 +107,7 @@ export interface WrapperBRequest {
   projectId?: string;
   sessionId?: string;
   files: File[];
+  stream?: boolean;
 }
 
 // Health check response
@@ -163,6 +164,7 @@ export interface AIMessage {
   timestamp: Date;
   isStreaming?: boolean;
   wrapperType?: WrapperType;
+  task_type?: string; // Preserve task_type from backend response
   artifacts?: {
     code: CodeArtifact[];
     tables: TableArtifact[];

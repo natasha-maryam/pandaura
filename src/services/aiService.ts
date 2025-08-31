@@ -165,6 +165,88 @@ export class AIService {
     return fullResponse;
   }
 
+  public async sendWrapperBStreamingMessage(
+    request: WrapperBRequest,
+    onChunk: (chunk: StreamChunk) => void
+  ): Promise<string> {
+    const formData = new FormData();
+    formData.append('prompt', request.prompt);
+    if (request.projectId) {
+      formData.append('projectId', request.projectId);
+    }
+    if (request.sessionId) {
+      formData.append('sessionId', request.sessionId);
+    }
+    formData.append('stream', 'true');
+    
+    // Add files to form data
+    request.files.forEach(file => {
+      formData.append('files', file);
+    });
+
+    const response = await fetch(`${this.baseUrl}/wrapperB`, {
+      method: 'POST',
+      headers: {
+        'Accept': 'text/event-stream',
+        'Cache-Control': 'no-cache',
+      },
+      body: formData,
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorData.error || `HTTP error! status: ${response.status}`);
+    }
+
+    const reader = response.body?.getReader();
+    if (!reader) {
+      throw new Error('Response body is not readable');
+    }
+
+    const decoder = new TextDecoder();
+    let fullResponse = '';
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+
+      const chunk = decoder.decode(value);
+      const lines = chunk.split('\n');
+
+      for (const line of lines) {
+        if (line.startsWith('data: ')) {
+          try {
+            const data: StreamChunk = JSON.parse(line.slice(6));
+            onChunk(data);
+            
+            if (data.type === 'chunk' && data.content) {
+              fullResponse += data.content;
+            } else if (data.type === 'complete' && data.answer) {
+              // Use the complete answer from the parsed response
+              fullResponse = data.answer;
+              
+              // If we have the full response object, dispatch it for UI components
+              if (typeof data.fullResponse === 'object' && data.fullResponse) {
+                const event = new CustomEvent('streamComplete', {
+                  detail: { fullResponse: data.fullResponse }
+                });
+                window.dispatchEvent(event);
+              }
+            } else if (data.type === 'end') {
+              // Streaming completed
+            } else if (data.type === 'error') {
+              throw new Error(data.error || 'Streaming error');
+            }
+          } catch (e) {
+            // Ignore parsing errors for non-JSON lines
+          }
+        }
+      }
+    }
+
+    return fullResponse;
+  }
+
   public async uploadAndAnalyzeDocuments(request: DocumentUploadRequest): Promise<DocumentAnalysisResponse> {
     const formData = new FormData();
     formData.append('prompt', request.prompt);

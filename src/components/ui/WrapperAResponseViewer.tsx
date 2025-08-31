@@ -83,8 +83,8 @@ export const WrapperAResponseViewer: React.FC<Props> = ({
         />
       ))}
 
-      {/* Table Artifacts - Only show for non-doc_qa tasks to avoid duplication */}
-      {response.task_type !== 'doc_qa' && response.artifacts.tables.map((artifact, index) => (
+      {/* Table Artifacts */}
+      {response.artifacts.tables.map((artifact, index) => (
         <TableArtifactViewer key={index} artifact={artifact} />
       ))}
 
