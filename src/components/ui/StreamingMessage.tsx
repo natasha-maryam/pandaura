@@ -2,6 +2,8 @@ import React, { useState, useEffect } from 'react';
 import ReactMarkdown from 'react-markdown';
 import { Loader2, Zap } from 'lucide-react';
 import pandauraLogo from '../../assets/logo.png';
+import { WrapperAResponse, CodeArtifact } from '../../types/ai';
+import { CodeArtifactViewer } from './CodeArtifactViewer';
 
 interface StreamingMessageProps {
   isStreaming: boolean;
@@ -20,6 +22,7 @@ export default function StreamingMessage({
 }: StreamingMessageProps) {
   const [displayContent, setDisplayContent] = useState('');
   const [showCursor, setShowCursor] = useState(true);
+  const [fullResponse, setFullResponse] = useState<WrapperAResponse | null>(null);
 
   // Update display content when streaming
   useEffect(() => {
@@ -30,7 +33,10 @@ export default function StreamingMessage({
 
   // Cursor blinking effect
   useEffect(() => {
-    if (!isStreaming && !isComplete) return;
+    if (!isStreaming || isComplete) {
+      setShowCursor(false);
+      return;
+    }
 
     const interval = setInterval(() => {
       setShowCursor(prev => !prev);
@@ -48,6 +54,18 @@ export default function StreamingMessage({
       }
     }
   }, [isComplete, streamContent, onStreamComplete]);
+
+  // Listen for window events that contain the full response
+  useEffect(() => {
+    const handleStreamComplete = (event: any) => {
+      if (event.detail && event.detail.fullResponse) {
+        setFullResponse(event.detail.fullResponse);
+      }
+    };
+
+    window.addEventListener('streamComplete', handleStreamComplete);
+    return () => window.removeEventListener('streamComplete', handleStreamComplete);
+  }, []);
 
   if (!isStreaming && !isComplete && !displayContent) {
     return null;
@@ -81,12 +99,21 @@ export default function StreamingMessage({
 
           {/* Content */}
           <div className="text-gray-800 prose prose-sm max-w-none">
-            {displayContent ? (
+            {isStreaming && displayContent ? (
               <div className="relative">
                 <ReactMarkdown>{displayContent}</ReactMarkdown>
-                {(isStreaming && !isComplete && showCursor) && (
+                {showCursor && (
                   <span className="inline-block w-2 h-4 bg-blue-500 ml-1 animate-pulse"></span>
                 )}
+              </div>
+            ) : isStreaming && !displayContent ? (
+              <div className="flex items-center gap-2 text-gray-600">
+                <Loader2 className="w-4 h-4 animate-spin" />
+                <span>Preparing response...</span>
+              </div>
+            ) : isComplete && displayContent ? (
+              <div className="relative">
+                <ReactMarkdown>{displayContent}</ReactMarkdown>
               </div>
             ) : (
               <div className="flex items-center gap-2 text-gray-600">
@@ -105,6 +132,26 @@ export default function StreamingMessage({
           )}
         </div>
       </div>
+
+      {/* Code Artifacts - Show after streaming is complete */}
+      {isComplete && fullResponse && fullResponse.artifacts?.code?.length > 0 && (
+        <div className="mt-4 space-y-3">
+          {fullResponse.artifacts.code.map((artifact, index) => (
+            <CodeArtifactViewer
+              key={index}
+              artifact={artifact}
+              onSaveToProject={() => {
+                // Handle save to project
+                console.log('Save to project:', artifact);
+              }}
+              onMoveToLogicStudio={() => {
+                // Handle move to logic studio
+                console.log('Move to logic studio:', artifact);
+              }}
+            />
+          ))}
+        </div>
+      )}
     </div>
   );
 }

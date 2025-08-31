@@ -21,10 +21,11 @@ import { useNavigate, useParams } from "react-router-dom";
 import { useProjectAutosave } from "../components/projects/hooks";
 import AutosaveStatus from "../components/ui/AutosaveStatus";
 import TypingIndicator from "../components/ui/TypingIndicator";
-import StreamingMessage from "../components/ui/StreamingMessage";
 import MemoryManager from "../components/ui/MemoryManager";
 import { aiService } from "../services/aiService";
 import { AIMessage, Conversation, WrapperAResponse, StreamChunk } from "../types/ai";
+import { CodeArtifactViewer } from "../components/ui/CodeArtifactViewer";
+import { TableArtifactViewer } from "../components/ui/TableArtifactViewer";
 
 interface AskPandauraProps {
   sessionMode?: boolean;
@@ -43,14 +44,20 @@ export default function AskPandaura({ sessionMode = false }: AskPandauraProps) {
   const [showMemoryManager, setShowMemoryManager] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   
-  // AI Chat State
-  const [currentConversation, setCurrentConversation] = useState<Conversation | null>(null);
-  const [conversations, setConversations] = useState<Conversation[]>([]);
+  // AI Chat State with persistence
+  const [currentConversation, setCurrentConversation] = useState<Conversation | null>(
+    moduleState.currentConversation || null
+  );
+  const [conversations, setConversations] = useState<Conversation[]>(
+    moduleState.conversations || []
+  );
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   
   // New AI Features
-  const [sessionId, setSessionId] = useState<string>(() => aiService.generateSessionId());
+  const [sessionId, setSessionId] = useState<string>(() => 
+    moduleState.sessionId || aiService.generateSessionId()
+  );
   const [streamingEnabled, setStreamingEnabled] = useState(true);
   const [isStreaming, setIsStreaming] = useState(false);
   const [streamContent, setStreamContent] = useState('');
@@ -89,6 +96,67 @@ export default function AskPandaura({ sessionMode = false }: AskPandauraProps) {
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [currentConversation?.messages]);
+
+  // Persist conversations to localStorage when they change
+  useEffect(() => {
+    saveModuleState('AskPandaura', {
+      ...getModuleState('AskPandaura'),
+      conversations,
+      currentConversation,
+      sessionId
+    });
+  }, [conversations, currentConversation, sessionId, saveModuleState]);
+
+  // Persist chat message separately with debouncing
+  useEffect(() => {
+    const timeoutId = setTimeout(() => {
+      saveModuleState('AskPandaura', {
+        ...getModuleState('AskPandaura'),
+        chatMessage
+      });
+    }, 500); // 500ms debounce for chat message
+
+    return () => clearTimeout(timeoutId);
+  }, [chatMessage, saveModuleState]);
+
+  // Load persisted conversations on component mount
+  useEffect(() => {
+    try {
+      const persistedState = getModuleState('AskPandaura');
+      console.log('Loading persisted state:', persistedState);
+      
+      if (persistedState.conversations && Array.isArray(persistedState.conversations)) {
+        // Convert date strings back to Date objects
+        const restoredConversations = persistedState.conversations.map((conv: any) => ({
+          ...conv,
+          createdAt: new Date(conv.createdAt),
+          updatedAt: new Date(conv.updatedAt),
+          messages: conv.messages.map((msg: any) => ({
+            ...msg,
+            timestamp: new Date(msg.timestamp)
+          }))
+        }));
+        setConversations(restoredConversations);
+        console.log('Restored conversations:', restoredConversations);
+      }
+      
+      if (persistedState.currentConversation) {
+        const restoredConversation = {
+          ...persistedState.currentConversation,
+          createdAt: new Date(persistedState.currentConversation.createdAt),
+          updatedAt: new Date(persistedState.currentConversation.updatedAt),
+          messages: persistedState.currentConversation.messages.map((msg: any) => ({
+            ...msg,
+            timestamp: new Date(msg.timestamp)
+          }))
+        };
+        setCurrentConversation(restoredConversation);
+        console.log('Restored current conversation:', restoredConversation);
+      }
+    } catch (error) {
+      console.error('Error loading persisted conversations:', error);
+    }
+  }, []);
 
   // Generate conversation ID
   const generateConversationId = () => {
@@ -156,6 +224,7 @@ export default function AskPandaura({ sessionMode = false }: AskPandauraProps) {
 
       // Handle file uploads
       let response: WrapperAResponse;
+      let streamingHandled = false;
       
       if (selectedFiles.length > 0) {
         setUploadingFiles(true);
@@ -210,6 +279,26 @@ export default function AskPandaura({ sessionMode = false }: AskPandauraProps) {
           setIsStreaming(true);
           let finalStreamContent = '';
           
+          // Add a placeholder streaming message immediately
+          const streamingMessageId = generateMessageId();
+          const streamingMessage: AIMessage = {
+            id: streamingMessageId,
+            role: 'assistant',
+            content: '',
+            timestamp: new Date(),
+            isStreaming: true,
+          };
+
+          const conversationWithStreaming = {
+            ...updatedConversation,
+            messages: [...updatedConversation.messages, streamingMessage],
+            updatedAt: new Date(),
+          };
+          setCurrentConversation(conversationWithStreaming);
+          setConversations(prev => 
+            prev.map(conv => conv.id === conversation!.id ? conversationWithStreaming : conv)
+          );
+          
           const fullResponse = await aiService.sendStreamingMessage(
             {
               prompt: userMessage,
@@ -222,6 +311,31 @@ export default function AskPandaura({ sessionMode = false }: AskPandauraProps) {
                 setStreamContent(prev => {
                   const newContent = prev + chunk.content;
                   finalStreamContent = newContent; // Keep track of final content
+                  
+                  // Update the streaming message in real-time
+                  setCurrentConversation(prevConv => {
+                    if (!prevConv) return prevConv;
+                    const updatedMessages = prevConv.messages.map(msg => 
+                      msg.id === streamingMessageId 
+                        ? { ...msg, content: newContent || '' }
+                        : msg
+                    );
+                    return { ...prevConv, messages: updatedMessages };
+                  });
+                  setConversations(prev => 
+                    prev.map(conv => {
+                      if (conv.id === conversation!.id) {
+                        const updatedMessages = conv.messages.map(msg => 
+                          msg.id === streamingMessageId 
+                            ? { ...msg, content: newContent || '' }
+                            : msg
+                        );
+                        return { ...conv, messages: updatedMessages };
+                      }
+                      return conv;
+                    })
+                  );
+                  
                   return newContent;
                 });
               } else if (chunk.type === 'complete' && chunk.answer) {
@@ -229,9 +343,63 @@ export default function AskPandaura({ sessionMode = false }: AskPandauraProps) {
                 finalStreamContent = chunk.answer;
                 setStreamContent(chunk.answer);
                 setStreamComplete(true);
+                
+                // Extract artifacts from the full response if available
+                let artifacts = undefined;
+                if (chunk.fullResponse && typeof chunk.fullResponse === 'object' && 'artifacts' in chunk.fullResponse) {
+                  artifacts = (chunk.fullResponse as WrapperAResponse).artifacts;
+                }
+                
+                // Update the final message with artifacts
+                setCurrentConversation(prevConv => {
+                  if (!prevConv) return prevConv;
+                  const updatedMessages = prevConv.messages.map(msg => 
+                    msg.id === streamingMessageId 
+                      ? { ...msg, content: chunk.answer || '', isStreaming: false, artifacts }
+                      : msg
+                  );
+                  return { ...prevConv, messages: updatedMessages };
+                });
+                setConversations(prev => 
+                  prev.map(conv => {
+                    if (conv.id === conversation!.id) {
+                      const updatedMessages = conv.messages.map(msg => 
+                        msg.id === streamingMessageId 
+                          ? { ...msg, content: chunk.answer || '', isStreaming: false, artifacts }
+                          : msg
+                      );
+                      return { ...conv, messages: updatedMessages };
+                    }
+                    return conv;
+                  })
+                );
               } else if (chunk.type === 'end') {
                 setStreamComplete(true);
                 setIsStreaming(false);
+                
+                // Mark streaming as complete
+                setCurrentConversation(prevConv => {
+                  if (!prevConv) return prevConv;
+                  const updatedMessages = prevConv.messages.map(msg => 
+                    msg.id === streamingMessageId 
+                      ? { ...msg, isStreaming: false }
+                      : msg
+                  );
+                  return { ...prevConv, messages: updatedMessages };
+                });
+                setConversations(prev => 
+                  prev.map(conv => {
+                    if (conv.id === conversation!.id) {
+                      const updatedMessages = conv.messages.map(msg => 
+                        msg.id === streamingMessageId 
+                          ? { ...msg, isStreaming: false }
+                          : msg
+                      );
+                      return { ...conv, messages: updatedMessages };
+                    }
+                    return conv;
+                  })
+                );
               } else if (chunk.type === 'error') {
                 throw new Error(chunk.error || 'Streaming error');
               }
@@ -251,6 +419,9 @@ export default function AskPandaura({ sessionMode = false }: AskPandauraProps) {
             next_actions: [],
             errors: [],
           };
+          
+          // For streaming, we already updated the message, so skip creating a new one
+          streamingHandled = true;
         } else {
           // Non-streaming request
           response = await aiService.sendMessage({
@@ -262,26 +433,29 @@ export default function AskPandaura({ sessionMode = false }: AskPandauraProps) {
         }
       }
 
-      // Create AI response message
-      const finalMessageContent = streamingEnabled ? response.answer_md : aiService.formatResponse(response);
-      const aiMessage: AIMessage = {
-        id: generateMessageId(),
-        role: 'assistant',
-        content: finalMessageContent,
-        timestamp: new Date(),
-        artifacts: response.artifacts,
-      };
+      // Only create AI response message if not handled by streaming
+      if (!streamingEnabled || !streamingHandled) {
+        // Create AI response message
+        const finalMessageContent = streamingEnabled ? response.answer_md : aiService.formatResponse(response);
+        const aiMessage: AIMessage = {
+          id: generateMessageId(),
+          role: 'assistant',
+          content: finalMessageContent,
+          timestamp: new Date(),
+          artifacts: response.artifacts,
+        };
 
-      // Update conversation with AI response
-      const finalConversation = {
-        ...updatedConversation,
-        messages: [...updatedConversation.messages, aiMessage],
-        updatedAt: new Date(),
-      };
-      setCurrentConversation(finalConversation);
-      setConversations(prev => 
-        prev.map(conv => conv.id === conversation!.id ? finalConversation : conv)
-      );
+        // Update conversation with AI response
+        const finalConversation = {
+          ...updatedConversation,
+          messages: [...updatedConversation.messages, aiMessage],
+          updatedAt: new Date(),
+        };
+        setCurrentConversation(finalConversation);
+        setConversations(prev => 
+          prev.map(conv => conv.id === conversation!.id ? finalConversation : conv)
+        );
+      }
 
       // Clear streaming state only after message is saved
       if (streamingEnabled) {
@@ -310,12 +484,37 @@ export default function AskPandaura({ sessionMode = false }: AskPandauraProps) {
     setError(null);
     setShowConversationsModal(false);
     setSessionId(aiService.generateSessionId()); // Generate new session ID
+    
+    // Clear persisted current conversation but keep conversations history
+    saveModuleState('AskPandaura', {
+      ...moduleState,
+      currentConversation: null,
+      chatMessage: "",
+      sessionId: aiService.generateSessionId()
+    });
   };
 
   // Load existing conversation
   const loadConversation = (conversation: Conversation) => {
     setCurrentConversation(conversation);
     setShowConversationsModal(false);
+  };
+
+  // Clear all conversations
+  const clearAllConversations = () => {
+    setCurrentConversation(null);
+    setConversations([]);
+    setChatMessage("");
+    setError(null);
+    setSessionId(aiService.generateSessionId());
+    
+    // Clear from persistence
+    saveModuleState('AskPandaura', {
+      conversations: [],
+      currentConversation: null,
+      chatMessage: "",
+      sessionId: aiService.generateSessionId()
+    });
   };
 
   // Handle memory cleared
@@ -389,7 +588,7 @@ export default function AskPandaura({ sessionMode = false }: AskPandauraProps) {
           </div>
           
           {/* New Chat Button */}
-          <div className="p-4 border-b border-light">
+          <div className="p-4 border-b border-light space-y-2">
             <button 
               onClick={startNewConversation}
               className="w-full flex items-center justify-center gap-2 bg-primary text-white px-4 py-2 rounded-md hover:bg-secondary transition-colors"
@@ -397,6 +596,16 @@ export default function AskPandaura({ sessionMode = false }: AskPandauraProps) {
               <Plus className="w-4 h-4" />
               New Chat
             </button>
+            
+            {conversations.length > 0 && (
+              <button 
+                onClick={clearAllConversations}
+                className="w-full flex items-center justify-center gap-2 bg-red-500 text-white px-4 py-2 rounded-md hover:bg-red-600 transition-colors text-sm"
+              >
+                <X className="w-4 h-4" />
+                Clear All Chats
+              </button>
+            )}
           </div>
           
           {/* Conversations List */}
@@ -441,22 +650,22 @@ export default function AskPandaura({ sessionMode = false }: AskPandauraProps) {
         <div className="flex items-center justify-between max-w-6xl mx-auto">
           <div className="flex items-center gap-2">
             {/* Session ID display */}
-            <div className="text-xs text-gray-500 bg-gray-100 px-2 py-1 rounded">
+            {/* <div className="text-xs text-gray-500 bg-gray-100 px-2 py-1 rounded">
               Session: {sessionId.split('_')[1]?.slice(0, 8)}...
-            </div>
-            
+            </div> */}
+
             {/* Streaming toggle */}
             <button
               onClick={() => setStreamingEnabled(!streamingEnabled)}
               className={`text-xs px-2 py-1 rounded transition-colors ${
-                streamingEnabled 
-                  ? 'bg-green-100 text-green-700 border border-green-200' 
-                  : 'bg-gray-100 text-gray-600 border border-gray-200'
+                streamingEnabled
+                  ? "bg-green-100 text-green-700 border border-green-200 w-[80px]"
+                  : "bg-gray-100 text-gray-600 border border-gray-200 w-[80px]"
               }`}
-              title={streamingEnabled ? 'Streaming ON' : 'Streaming OFF'}
+              title={streamingEnabled ? "Streaming ON" : "Streaming OFF"}
             >
               <Zap className="w-3 h-3 inline mr-1" />
-              {streamingEnabled ? 'Stream' : 'Regular'}
+              {streamingEnabled ? "Stream" : "Regular"}
             </button>
           </div>
 
@@ -504,49 +713,75 @@ export default function AskPandaura({ sessionMode = false }: AskPandauraProps) {
         {currentConversation && currentConversation.messages.length > 0 ? (
           <div className="space-y-6 mt-8 scrollable-container optimized-text max-w-6xl mx-auto">
             {currentConversation.messages.map((message: any) => (
-              <div key={message.id} className={`px-4 py-3 text-sm ${message.role === 'assistant' ? 'bg-gray-50' : ''}`}>
-                <div className="flex items-start gap-3 mb-2">
-                  <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-medium ${
-                    message.role === 'user' 
-                      ? 'bg-gray-300 text-gray-700' 
-                      : 'bg-primary text-white'
-                  }`}>
-                    {message.role === 'user' ? (
-                      'You'
-                    ) : (
-                      <img 
-                        src={pandauraLogo} 
-                        alt="Pandaura" 
-                        className="w-5 h-5 rounded-full object-cover"
-                      />
-                    )}
+              <div
+                key={message.id}
+                className={`px-4 py-3 text-sm `}
+              >
+                <div className="flex items-start gap-3">
+                  <div
+                    className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-medium shrink-0 ${
+                      message.role === "user"
+                        ? "bg-gray-300 text-gray-700"
+                        : "bg-black text-white"
+                    }`}
+                  >
+                    {message.role === "user" ? "You" : "P"}
                   </div>
                   <div className="flex-1">
                     <div className="text-gray-800 prose prose-sm max-w-none">
-                      <ReactMarkdown>{message.content}</ReactMarkdown>
+                      {message.isStreaming && !message.content ? (
+                        <div className="flex items-center gap-2 text-gray-600">
+                          <TypingIndicator />
+                          <span className="text-xs">Thinking...</span>
+                        </div>
+                      ) : message.content ? (
+                        <div className="relative">
+                          <ReactMarkdown>{message.content}</ReactMarkdown>
+                          {message.isStreaming && (
+                            <span className="inline-block w-2 h-4 bg-blue-500 ml-1 animate-pulse"></span>
+                          )}
+                        </div>
+                      ) : (
+                        <ReactMarkdown>{message.content}</ReactMarkdown>
+                      )}
                     </div>
-                    
+
+                    {/* Show completion indicator for recently completed streams */}
+                    {!message.isStreaming && message.content && streamComplete && currentConversation?.messages[currentConversation.messages.length - 1]?.id === message.id && (
+                      <div className="flex items-center gap-2 mt-2 text-xs text-green-600">
+                        <div className="w-2 h-2 bg-green-500 rounded-full"></div>
+                        <span>Response complete</span>
+                      </div>
+                    )}
+
                     {/* Render artifacts if present */}
                     {message.artifacts && (
-                      <div className="mt-3 space-y-2">
+                      <div className="mt-4 space-y-3">
                         {/* Code artifacts */}
-                        {message.artifacts.code.length > 0 && (
-                          <div className="flex gap-2">
-                            <button 
-                              onClick={() => navigate('/logic-studio')}
-                              className="bg-primary text-white px-3 py-1 rounded text-xs hover:bg-secondary transition-colors flex items-center gap-1"
-                            >
-                              <Code className="w-3 h-3" />
-                              Open in Logic Studio
-                            </button>
-                          </div>
-                        )}
-                        
+                        {message.artifacts.code.map((artifact: any, index: number) => (
+                          <CodeArtifactViewer
+                            key={index}
+                            artifact={artifact}
+                            onSaveToProject={() => {
+                              // Handle save to project
+                              console.log('Save to project:', artifact);
+                            }}
+                            onMoveToLogicStudio={() => {
+                              navigate("/logic-studio");
+                            }}
+                          />
+                        ))}
+
                         {/* Table artifacts */}
+                        {message.artifacts.tables.map((artifact: any, index: number) => (
+                          <TableArtifactViewer key={index} artifact={artifact} />
+                        ))}
+
+                        {/* Action buttons for artifacts */}
                         {message.artifacts.tables.length > 0 && (
-                          <div className="flex gap-2">
-                            <button 
-                              onClick={() => navigate('/tag-database')}
+                          <div className="flex gap-2 pt-2">
+                            <button
+                              onClick={() => navigate("/tag-database")}
                               className="bg-white border border-light px-3 py-1 rounded text-xs hover:bg-accent-light transition-colors flex items-center gap-1"
                             >
                               <Database className="w-3 h-3" />
@@ -560,15 +795,15 @@ export default function AskPandaura({ sessionMode = false }: AskPandauraProps) {
                 </div>
               </div>
             ))}
-            
+
             {/* Loading indicator with typing dots */}
             {(isLoading || uploadingFiles) && !isStreaming && (
               <div className="px-4 py-3 text-sm bg-gray-50">
-                <div className="flex items-start gap-3 mb-2">
-                  <div className="w-8 h-8 bg-primary rounded-full flex items-center justify-center text-xs font-medium text-white">
-                    <img 
-                      src={pandauraLogo} 
-                      alt="Pandaura" 
+                <div className="flex items-start gap-3">
+                  <div className="w-8 h-8 bg-primary rounded-full flex items-center justify-center text-xs font-medium text-white shrink-0">
+                    <img
+                      src={pandauraLogo}
+                      alt="Pandaura"
                       className="w-5 h-5 rounded-full object-cover"
                     />
                   </div>
@@ -576,57 +811,55 @@ export default function AskPandaura({ sessionMode = false }: AskPandauraProps) {
                     <div className="flex items-center gap-3 text-gray-600">
                       <TypingIndicator />
                       <span className="text-xs">
-                        {uploadingFiles ? 'Processing files...' : 'Thinking...'}
+                        {uploadingFiles ? "Processing files..." : "Thinking..."}
                       </span>
                     </div>
                     <div className="text-xs text-gray-500 mt-1">
-                      {uploadingFiles 
-                        ? '� Analyzing uploaded documents and images'
-                        : '�💡 Complex automation tasks may take a moment to process'
-                      }
+                      {uploadingFiles
+                        ? "� Analyzing uploaded documents and images"
+                        : "�💡 Complex automation tasks may take a moment to process"}
                     </div>
                   </div>
                 </div>
               </div>
             )}
 
-            {/* Streaming Message */}
-            {isStreaming && (
-              <StreamingMessage
-                isStreaming={isStreaming}
-                streamContent={streamContent}
-                isComplete={streamComplete}
-                onStreamComplete={(fullResponse) => {
-                  setStreamContent(fullResponse);
-                  setStreamComplete(true);
-                }}
-              />
-            )}
-            
             <div ref={messagesEndRef} />
           </div>
         ) : (
           /* Welcome Screen */
           <div className="text-muted mt-4 px-6 flex flex-col items-center text-center max-w-6xl mx-auto">
-            <img 
-              src={pandauraLogo} 
-              alt="Pandaura Logo" 
-              className="h-24 w-auto mb-4 filter-none" 
-              style={{ filter: 'none', imageRendering: 'crisp-edges' }}
+            <img
+              src={pandauraLogo}
+              alt="Pandaura Logo"
+              className="h-24 w-auto mb-4 filter-none"
+              style={{ filter: "none", imageRendering: "crisp-edges" }}
             />
-            <h2 className="text-lg font-semibold text-primary">Ask Pandaura Anything</h2>
+            <h2 className="text-lg font-semibold text-primary">
+              Ask Pandaura Anything
+            </h2>
             <p className="text-sm">
               Start a conversation with Pandaura or upload a document to begin.
             </p>
-            
+
+            {/* Persistence indicator */}
+            {conversations.length > 0 && (
+              <div className="mt-2 text-xs text-green-600 bg-green-50 px-2 py-1 rounded border">
+                💾 {conversations.length} conversation
+                {conversations.length !== 1 ? "s" : ""} saved locally
+              </div>
+            )}
+
             {/* Sample questions */}
             <div className="mt-6 grid grid-cols-1 md:grid-cols-2 gap-3 w-full max-w-4xl">
-              <p className="col-span-full text-xs font-medium text-gray-600 mb-2 text-left">Try asking:</p>
+              <p className="col-span-full text-xs font-medium text-gray-600 mb-2 text-left">
+                Try asking:
+              </p>
               {[
                 "Create a motor starter logic with safety interlocks",
                 "Generate tag database for a conveyor system",
                 "Help me with TIA Portal configuration",
-                "Design SCADA screens for process monitoring"
+                "Design SCADA screens for process monitoring",
               ].map((question, index) => (
                 <button
                   key={index}
@@ -642,25 +875,28 @@ export default function AskPandaura({ sessionMode = false }: AskPandauraProps) {
       </div>
 
       {/* Fixed Bottom Input */}
-      <div className={`fixed bottom-0 right-0 bg-white border-t px-6 py-4 shadow-md z-30 transition-all duration-200 ${
-        sidebarCollapsed ? 'left-16' : 'left-72'
-      }`}>
+      <div
+        className={`fixed bottom-0 right-0 bg-white border-t px-6 py-4 shadow-md z-30 transition-all duration-200 ${
+          sidebarCollapsed ? "left-16" : "left-72"
+        }`}
+      >
         {/* Selected Files Indicator */}
         {selectedFiles.length > 0 && (
           <div className="mb-3 max-w-6xl mx-auto">
             <div className="flex items-center gap-2 bg-blue-50 border border-blue-200 rounded-md px-3 py-2">
               <div className="flex items-center gap-2 flex-1">
-                {selectedFiles.some(f => aiService.getFileTypeCategory(f) === 'image') && (
-                  <Image className="w-4 h-4 text-blue-600" />
-                )}
-                {selectedFiles.some(f => aiService.getFileTypeCategory(f) === 'document') && (
-                  <FileText className="w-4 h-4 text-blue-600" />
-                )}
+                {selectedFiles.some(
+                  (f) => aiService.getFileTypeCategory(f) === "image"
+                ) && <Image className="w-4 h-4 text-blue-600" />}
+                {selectedFiles.some(
+                  (f) => aiService.getFileTypeCategory(f) === "document"
+                ) && <FileText className="w-4 h-4 text-blue-600" />}
                 <span className="text-sm text-blue-700 font-medium">
-                  {selectedFiles.length} file{selectedFiles.length > 1 ? 's' : ''} selected
+                  {selectedFiles.length} file
+                  {selectedFiles.length > 1 ? "s" : ""} selected
                 </span>
                 <div className="text-xs text-blue-600 max-w-md truncate">
-                  ({selectedFiles.map(f => f.name).join(', ')})
+                  ({selectedFiles.map((f) => f.name).join(", ")})
                 </div>
               </div>
               <button
@@ -675,28 +911,29 @@ export default function AskPandaura({ sessionMode = false }: AskPandauraProps) {
           </div>
         )}
 
-        <div className="flex items-end gap-3 max-w-6xl mx-auto">{/* Wider max width for full use of space */}
+        <div className="flex items-end gap-3 max-w-6xl mx-auto">
+          {/* Wider max width for full use of space */}
           <textarea
             value={chatMessage}
             onChange={(e) => setChatMessage(e.target.value)}
             onKeyDown={(e) => {
-              if (e.key === 'Enter' && !e.shiftKey) {
+              if (e.key === "Enter" && !e.shiftKey) {
                 e.preventDefault();
                 sendMessage();
               }
             }}
             placeholder={
-              selectedFiles.length > 0 
+              selectedFiles.length > 0
                 ? "Ask about the uploaded files or add additional instructions..."
                 : "Ask about PLCs, SCADA, HMI, robotics, motor control, or upload documents..."
             }
             className="flex-1 border border-light rounded-md px-4 py-3 bg-surface shadow-sm text-sm text-primary placeholder-muted resize-none focus:outline-none focus:ring-2 focus:ring-accent focus:border-accent transition-all min-h-[44px] max-h-[120px]"
             rows={1}
-            style={{ height: 'auto' }}
+            style={{ height: "auto" }}
             onInput={(e) => {
               const target = e.target as HTMLTextAreaElement;
-              target.style.height = 'auto';
-              target.style.height = Math.min(target.scrollHeight, 120) + 'px';
+              target.style.height = "auto";
+              target.style.height = Math.min(target.scrollHeight, 120) + "px";
             }}
           />
           <div className="flex gap-2">
@@ -709,28 +946,32 @@ export default function AskPandaura({ sessionMode = false }: AskPandauraProps) {
                   const files = Array.from(e.target.files || []);
                   if (files.length > 0) {
                     // Validate file types
-                    const validFiles = files.filter(file => aiService.isFileSupported(file));
+                    const validFiles = files.filter((file) =>
+                      aiService.isFileSupported(file)
+                    );
                     if (validFiles.length !== files.length) {
-                      setError('Some files are not supported. Please use images (PNG, JPG, GIF) or documents (PDF, DOC, TXT, CSV, XLS, PPT).');
+                      setError(
+                        "Some files are not supported. Please use images (PNG, JPG, GIF) or documents (PDF, DOC, TXT, CSV, XLS, PPT)."
+                      );
                     }
                     if (validFiles.length > 0) {
-                      setSelectedFiles(prev => [...prev, ...validFiles]);
+                      setSelectedFiles((prev) => [...prev, ...validFiles]);
                       setError(null);
                     }
                   }
                   // Reset input value to allow same file selection again
-                  e.target.value = '';
+                  e.target.value = "";
                 }}
                 className="hidden"
                 id="file-upload"
                 disabled={isLoading || isStreaming || uploadingFiles}
               />
-              <button 
-                onClick={() => document.getElementById('file-upload')?.click()}
+              <button
+                onClick={() => document.getElementById("file-upload")?.click()}
                 className={`border p-3 rounded-md transition-colors shadow-sm relative ${
                   selectedFiles.length > 0
-                    ? 'bg-blue-100 border-blue-300 text-blue-600'
-                    : 'bg-white border-light text-primary hover:bg-accent-light'
+                    ? "bg-blue-100 border-blue-300 text-blue-600"
+                    : "bg-white border-light text-primary hover:bg-accent-light"
                 }`}
                 title="Upload documents or images"
                 disabled={isLoading || isStreaming || uploadingFiles}
@@ -743,15 +984,20 @@ export default function AskPandaura({ sessionMode = false }: AskPandauraProps) {
                 )}
               </button>
             </div>
-            <button 
+            <button
               onClick={sendMessage}
               className="bg-primary text-white px-6 py-3 rounded-md hover:bg-secondary transition-colors text-sm font-medium shadow-sm disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
-              disabled={(!chatMessage.trim() && selectedFiles.length === 0) || isLoading || isStreaming || uploadingFiles}
+              disabled={
+                (!chatMessage.trim() && selectedFiles.length === 0) ||
+                isLoading ||
+                isStreaming ||
+                uploadingFiles
+              }
             >
-              {(isLoading || uploadingFiles) ? (
+              {isLoading || uploadingFiles ? (
                 <>
                   <Loader2 className="w-4 h-4 animate-spin" />
-                  {uploadingFiles ? 'Processing...' : ''}
+                  {uploadingFiles ? "Processing..." : ""}
                 </>
               ) : (
                 <Send className="w-4 h-4" />
@@ -768,7 +1014,9 @@ export default function AskPandaura({ sessionMode = false }: AskPandauraProps) {
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
           <div className="bg-white rounded-lg w-[500px] max-h-[80vh] overflow-hidden shadow-lg">
             <div className="flex items-center justify-between p-4 border-b border-light">
-              <h3 className="text-lg font-semibold text-primary">Memory Management</h3>
+              <h3 className="text-lg font-semibold text-primary">
+                Memory Management
+              </h3>
               <button
                 onClick={() => setShowMemoryManager(false)}
                 className="text-secondary hover:text-primary"

@@ -140,6 +140,14 @@ export class AIService {
             } else if (data.type === 'complete' && data.answer) {
               // Use the complete answer from the parsed response
               fullResponse = data.answer;
+              
+              // If we have the full response object, dispatch it for UI components
+              if (typeof data.fullResponse === 'object' && data.fullResponse) {
+                const event = new CustomEvent('streamComplete', {
+                  detail: { fullResponse: data.fullResponse }
+                });
+                window.dispatchEvent(event);
+              }
             } else if (data.type === 'end') {
               // Streaming completed
             } else if (data.type === 'error') {

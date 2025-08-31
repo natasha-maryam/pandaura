@@ -52,7 +52,7 @@ export interface HealthResponse {
 
 // Streaming response types
 export interface StreamChunk {
-  type: 'chunk' | 'end' | 'error' | 'complete';
+  type: 'chunk' | 'end' | 'error' | 'complete' | 'status' | 'start';
   content?: string;
   fullResponse?: string | WrapperAResponse;
   answer?: string;
@@ -91,6 +91,7 @@ export interface AIMessage {
   role: 'user' | 'assistant';
   content: string;
   timestamp: Date;
+  isStreaming?: boolean;
   artifacts?: {
     code: CodeArtifact[];
     tables: TableArtifact[];

@@ -1,7 +1,7 @@
 import React from 'react';
 import { CodeArtifact } from '../../types/ai';
-import { Button } from './Button';
-import { Card } from './Card';
+import  Button  from './Button';
+import  Card  from './Card';
 
 interface Props {
   artifact: CodeArtifact;

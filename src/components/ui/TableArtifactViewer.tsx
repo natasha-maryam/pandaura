@@ -1,6 +1,6 @@
 import React from 'react';
 import { TableArtifact } from '../../types/ai';
-import { Card } from './Card';
+import  Card  from './Card';
 
 interface Props {
   artifact: TableArtifact;
