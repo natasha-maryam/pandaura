@@ -336,40 +336,44 @@ export default function AskPandaura({ sessionMode = false }: AskPandauraProps) {
                   // Store the complete response data for artifacts
                   finalStreamContent = chunk.answer || finalStreamContent;
                   
-                  setCurrentConversation(prevConv => {
-                    if (!prevConv) return prevConv;
-                    const updatedMessages = prevConv.messages.map(msg => 
-                      msg.id === streamingMessageId 
-                        ? { 
-                            ...msg, 
-                            content: finalStreamContent,
-                            task_type: chunk.fullResponse.task_type,
-                            artifacts: chunk.fullResponse.artifacts,
-                            processedFiles: chunk.fullResponse.processed_files
-                          }
-                        : msg
+                  // Type guard for fullResponse
+                  const fullResponse = chunk.fullResponse;
+                  if (typeof fullResponse === 'object' && fullResponse !== null) {
+                    setCurrentConversation(prevConv => {
+                      if (!prevConv) return prevConv;
+                      const updatedMessages = prevConv.messages.map(msg => 
+                        msg.id === streamingMessageId 
+                          ? { 
+                              ...msg, 
+                              content: finalStreamContent,
+                              task_type: (fullResponse as any).task_type,
+                              artifacts: (fullResponse as any).artifacts,
+                              processedFiles: (fullResponse as any).processed_files
+                            }
+                          : msg
+                      );
+                      return { ...prevConv, messages: updatedMessages };
+                    });
+                    setConversations(prev => 
+                      prev.map(conv => {
+                        if (conv.id === conversation!.id) {
+                          const updatedMessages = conv.messages.map(msg => 
+                            msg.id === streamingMessageId 
+                              ? { 
+                                  ...msg, 
+                                  content: finalStreamContent,
+                                  task_type: (fullResponse as any).task_type,
+                                  artifacts: (fullResponse as any).artifacts,
+                                  processedFiles: (fullResponse as any).processed_files
+                                }
+                              : msg
+                          );
+                          return { ...conv, messages: updatedMessages };
+                        }
+                        return conv;
+                      })
                     );
-                    return { ...prevConv, messages: updatedMessages };
-                  });
-                  setConversations(prev => 
-                    prev.map(conv => {
-                      if (conv.id === conversation!.id) {
-                        const updatedMessages = conv.messages.map(msg => 
-                          msg.id === streamingMessageId 
-                            ? { 
-                                ...msg, 
-                                content: finalStreamContent,
-                                task_type: chunk.fullResponse.task_type,
-                                artifacts: chunk.fullResponse.artifacts,
-                                processedFiles: chunk.fullResponse.processed_files
-                              }
-                            : msg
-                        );
-                        return { ...conv, messages: updatedMessages };
-                      }
-                      return conv;
-                    })
-                  );
+                  }
                 } else if (chunk.type === 'end') {
                   setIsStreaming(false);
                   
@@ -985,23 +989,23 @@ export default function AskPandaura({ sessionMode = false }: AskPandauraProps) {
           )}
           {/* Chat Messages or Welcome Screen */}
           {currentConversation && currentConversation.messages.length > 0 ? (
-            <div className="space-y-6 mt-8 mb-8 max-w-6xl mx-auto">
+            <div className="space-y-4 mt-8 mb-8 max-w-6xl mx-auto">
               {currentConversation.messages.map((message: any) => (
-                <div key={message.id} className={`px-4 py-3 text-sm `}>
-                  <div className="flex items-start gap-3">
+                <div key={message.id} className={`px-4 py-2 text-sm `}>
+                  <div className="flex gap-2">
                     {message.role === "user" ? (
                       <div
-                        className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-medium shrink-0 bg-gray-300 text-gray-700`}
+                        className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-medium shrink-0 bg-gray-300 text-gray-700 mt-0.5`}
                       >You</div>
                     ) : (
                       <img
                         src={pandauraLogo}
                         alt="Pandaura"
-                        className="w-8 h-8 rounded-full object-cover"
+                        className="w-8 h-8 rounded-full object-cover shrink-0 mt-0.5"
                       />
                     )}
 
-                    <div className="flex-1">
+                    <div className="flex-1 min-w-0">
                       <div className="text-gray-800 prose prose-sm max-w-none">
                         {message.isStreaming && !message.content ? (
                           <div className="flex items-center gap-2 text-gray-600">
@@ -1354,7 +1358,7 @@ export default function AskPandaura({ sessionMode = false }: AskPandauraProps) {
                 ? "Ask about the uploaded files or add additional instructions..."
                 : "Upload PLC files, documents, or images for analysis..."
             }
-            className="flex-1 border border-light rounded-md px-4 py-3 bg-surface shadow-sm text-sm text-primary placeholder-muted resize-none focus:outline-none focus:ring-2 focus:ring-accent focus:border-accent transition-all min-h-[44px] max-h-[120px]"
+            className="flex-1 border border-light rounded-md px-4 py-2 bg-surface shadow-sm text-sm text-primary placeholder-muted resize-none focus:outline-none focus:ring-2 focus:ring-accent focus:border-accent transition-all min-h-[36px] max-h-[120px]"
             rows={1}
             style={{ height: "auto" }}
             onInput={(e) => {
