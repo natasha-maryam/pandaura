@@ -361,8 +361,8 @@ export class AIService {
   public formatResponse(response: WrapperAResponse): string {
     let formattedResponse = response.answer_md;
 
-    // Clean any "Next step →" text that might still be in the response
-    formattedResponse = formattedResponse.replace(/Next step → .*/gi, '');
+    // Format "Next step →" as proper heading instead of removing it
+    formattedResponse = formattedResponse.replace(/Next step → (.+)/gi, '\n\n### Next Step\n\n$1');
     
     // Add assumptions if any
     if (response.assumptions && response.assumptions.length > 0) {

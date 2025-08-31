@@ -502,11 +502,14 @@ export default function AskPandaura({ sessionMode = false }: AskPandauraProps) {
         setUploadingFiles(false);
         setSelectedFiles([]);
       } else {
-        // Regular text message - only Wrapper A supports this (Wrapper B requires files)
+        // Regular text message - check Wrapper B session context
         if (selectedWrapper === 'B') {
-          setError("Document Analyst requires files to analyze. Please upload PLC files, documents, or images.");
-          setIsLoading(false);
-          return;
+          if (!currentConversation?.uploadedFiles?.length) {
+            setError("Document Analyst requires files to analyze. Please upload PLC files, documents, or images, or switch to General Assistant (Wrapper A).");
+            setIsLoading(false);
+            return;
+          }
+          // Session has files - allow text-only analysis to continue
         }
         
         // Regular text message for Wrapper A
