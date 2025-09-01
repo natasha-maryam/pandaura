@@ -156,7 +156,7 @@ export default function AskPandaura({ sessionMode = false }: AskPandauraProps) {
   useEffect(() => {
     try {
       const persistedState = getModuleState('AskPandaura');
-      console.log('Loading persisted state:', persistedState);
+      // console.log('Loading persisted state:', persistedState);
       
       if (persistedState.conversations && Array.isArray(persistedState.conversations)) {
         // Convert date strings back to Date objects
@@ -170,7 +170,7 @@ export default function AskPandaura({ sessionMode = false }: AskPandauraProps) {
           }))
         }));
         setConversations(restoredConversations);
-        console.log('Restored conversations:', restoredConversations);
+        // console.log('Restored conversations:', restoredConversations);
       }
       
       if (persistedState.currentConversation) {
@@ -184,7 +184,7 @@ export default function AskPandaura({ sessionMode = false }: AskPandauraProps) {
           }))
         };
         setCurrentConversation(restoredConversation);
-        console.log('Restored current conversation:', restoredConversation);
+        // console.log('Restored current conversation:', restoredConversation);
       }
     } catch (error) {
       console.error('Error loading persisted conversations:', error);
@@ -268,14 +268,14 @@ export default function AskPandaura({ sessionMode = false }: AskPandauraProps) {
           if (selectedFiles.length > 0) {
             currentSessionId = aiService.generateSessionId();
             setSessionId(currentSessionId);
-            console.log(`🔄 NEW FILES DETECTED - Creating fresh session: ${currentSessionId}`);
-            console.log(`📁 Files being uploaded:`, selectedFiles.map(f => f.name));
+            // console.log(`🔄 NEW FILES DETECTED - Creating fresh session: ${currentSessionId}`);
+            // console.log(`📁 Files being uploaded:`, selectedFiles.map(f => f.name));
             
             // Don't clear conversation's uploaded files - they'll be updated after successful upload
-            console.log(`📂 Previous files in conversation:`, currentConversation?.uploadedFiles?.map(f => f.filename) || 'none');
+            // console.log(`📂 Previous files in conversation:`, currentConversation?.uploadedFiles?.map(f => f.filename) || 'none');
           } else {
-            console.log(`💬 FOLLOW-UP QUESTION - Using existing session: ${currentSessionId}`);
-            console.log(`📂 Previous files available:`, currentConversation?.uploadedFiles?.map(f => f.filename) || 'none');
+            // console.log(`💬 FOLLOW-UP QUESTION - Using existing session: ${currentSessionId}`);
+            // console.log(`📂 Previous files available:`, currentConversation?.uploadedFiles?.map(f => f.filename) || 'none');
           }
           
           // Use Wrapper B for document analysis with streaming support
