@@ -2,7 +2,7 @@ export type VendorType = 'Rockwell' | 'Siemens' | 'Beckhoff' | 'Generic';
 
 export type TaskType = 'qna' | 'code_gen' | 'code_edit' | 'debug' | 'optimize' | 'calc' | 'checklist' | 'report' | 'safety_analysis' | 'compliance_check' | 'risk_assessment' | 'safety_code_gen' | 'audit_report' | 'sil_assessment' | 'project_planning' | 'integration_design' | 'schedule_management' | 'resource_planning' | 'stakeholder_coordination';
 
-export type WrapperType = 'A' | 'B';
+export type WrapperType = 'A' | 'B' | 'C';
 
 export interface CodeArtifact {
   language: 'ST' | string; // Allow both specific 'ST' and generic string for flexibility
@@ -50,6 +50,8 @@ export interface WrapperAResponse {
     size: number;
     extracted_data_available: boolean;
   }>;
+  // Pandaura AS specific field
+  wrapperType?: WrapperType;
 }
 
 export interface WrapperARequest {
@@ -100,13 +102,17 @@ export interface WrapperBResponse {
     size: number;
     extracted_data_available: boolean;
   }>;
+  // Pandaura AS specific field
+  wrapperType?: WrapperType;
 }
 
 export interface WrapperBRequest {
   prompt: string;
   projectId?: string;
   sessionId?: string;
-  files: File[];
+  vendor_selection?: VendorType;
+  textInput?: string;
+  files?: File[];
   stream?: boolean;
 }
 
@@ -207,7 +213,7 @@ export interface Conversation {
   }>;
 }
 
-// Wrapper C Response (Verification & Self-Check Layer)
+// Wrapper C Response (General Assistant)
 export interface WrapperCResponse {
   status: 'ok' | 'needs_input' | 'error';
   task_type: TaskType;
@@ -216,21 +222,19 @@ export interface WrapperCResponse {
   artifacts: {
     code: CodeArtifact[];
     tables: TableArtifact[];
-    reports: Array<{
-      title: string;
-      content_md: string;
-    }>;
-    anchors: Array<{
-      id: string;
-      file: string;
-      page?: number;
-      note: string;
-    }>;
     citations: string[];
   };
-  verification_notes: string;
   next_actions: string[];
   errors: string[];
+  wrapperType?: WrapperType;
+}
+
+export interface WrapperCRequest {
+  prompt: string;
+  projectId?: string;
+  sessionId?: string;
+  stream?: boolean;
+  files?: File[];
 }
 
 // Wrapper D Response (Multi-Perspective Role Check)

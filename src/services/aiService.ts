@@ -3,6 +3,8 @@ import {
   WrapperAResponse, 
   WrapperBRequest,
   WrapperBResponse,
+  WrapperCRequest,
+  WrapperCResponse,
   HealthResponse, 
   StreamChunk, 
   DocumentUploadRequest, 
@@ -11,7 +13,7 @@ import {
   ImageAnalysisResponse 
 } from '../types/ai';
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000';
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5001';
 
 export class AIService {
   private static instance: AIService;
@@ -180,9 +182,11 @@ export class AIService {
     formData.append('stream', 'true');
     
     // Add files to form data
-    request.files.forEach(file => {
-      formData.append('files', file);
-    });
+    if (request.files && request.files.length > 0) {
+      request.files.forEach(file => {
+        formData.append('files', file);
+      });
+    }
 
     const response = await fetch(`${this.baseUrl}/wrapperB`, {
       method: 'POST',
@@ -260,9 +264,11 @@ export class AIService {
     }
 
     // Add all files to the FormData
-    request.files.forEach((file) => {
-      formData.append('document', file);
-    });
+    if (request.files && request.files.length > 0) {
+      request.files.forEach((file) => {
+        formData.append('document', file);
+      });
+    }
 
     const response = await fetch(`${this.baseUrl}/wrapperA`, {
       method: 'POST',
@@ -336,14 +342,121 @@ export class AIService {
     }
 
     // Add all files to the FormData
-    request.files.forEach((file) => {
-      formData.append('files', file);
-    });
+    if (request.files && request.files.length > 0) {
+      request.files.forEach((file) => {
+        formData.append('files', file);
+      });
+    }
 
     const response = await fetch(`${this.baseUrl}/wrapperB`, {
       method: 'POST',
       body: formData,
     });    return this.handleResponse(response);
+  }
+
+  public async sendWrapperCMessage(request: WrapperCRequest): Promise<WrapperCResponse> {
+    if (request.stream) {
+      throw new Error('Use sendWrapperCStreamingMessage for streaming requests');
+    }
+
+    const formData = new FormData();
+    formData.append('prompt', request.prompt);
+    if (request.projectId) formData.append('projectId', request.projectId);
+    if (request.sessionId) formData.append('sessionId', request.sessionId);
+    if (request.stream !== undefined) formData.append('stream', request.stream.toString());
+
+    if (request.files && request.files.length > 0) {
+      request.files.forEach((file) => {
+        formData.append('files', file);
+      });
+    }
+
+    const response = await fetch(`${this.baseUrl}/wrapperC`, {
+      method: 'POST',
+      body: formData,
+    });
+    return this.handleResponse(response);
+  }
+
+  public async sendWrapperCStreamingMessage(
+    request: WrapperCRequest,
+    onChunk: (chunk: StreamChunk) => void
+  ): Promise<string> {
+    const formData = new FormData();
+    formData.append('prompt', request.prompt);
+    if (request.projectId) {
+      formData.append('projectId', request.projectId);
+    }
+    if (request.sessionId) {
+      formData.append('sessionId', request.sessionId);
+    }
+    formData.append('stream', 'true');
+
+    if (request.files && request.files.length > 0) {
+      request.files.forEach(file => {
+        formData.append('files', file);
+      });
+    }
+
+    const response = await fetch(`${this.baseUrl}/wrapperC`, {
+      method: 'POST',
+      headers: {
+        'Accept': 'text/event-stream',
+        'Cache-Control': 'no-cache',
+      },
+      body: formData,
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorData.error || `HTTP error! status: ${response.status}`);
+    }
+
+    const reader = response.body?.getReader();
+    if (!reader) {
+      throw new Error('Response body is not readable');
+    }
+
+    const decoder = new TextDecoder();
+    let fullResponse = '';
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+
+      const chunk = decoder.decode(value);
+      const lines = chunk.split('\n');
+
+      for (const line of lines) {
+        if (line.startsWith('data: ')) {
+          try {
+            const data: StreamChunk = JSON.parse(line.slice(6));
+            onChunk(data);
+            
+            if (data.type === 'chunk' && data.content) {
+              fullResponse += data.content;
+            } else if (data.type === 'complete' && data.answer) {
+              fullResponse = data.answer;
+              
+              if (typeof data.fullResponse === 'object' && data.fullResponse) {
+                const event = new CustomEvent('streamComplete', {
+                  detail: { fullResponse: data.fullResponse }
+                });
+                window.dispatchEvent(event);
+              }
+            } else if (data.type === 'end') {
+              // Streaming completed
+            } else if (data.type === 'error') {
+              throw new Error(data.error || 'Streaming error');
+            }
+          } catch (e) {
+            // Ignore parsing errors for non-JSON lines
+          }
+        }
+      }
+    }
+
+    return fullResponse;
   }
 
   public async uploadImage(file: File): Promise<{ status: string; image_url: string; image_info: any }> {
@@ -408,7 +521,7 @@ export class AIService {
     return `session_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
   }
 
-  public isFileSupported(file: File, wrapperType: 'A' | 'B' = 'A'): boolean {
+  public isFileSupported(file: File, wrapperType: 'A' | 'B' | 'C' = 'A'): boolean {
     const wrapperATypes = [
       // Images
       'image/jpeg',
@@ -455,7 +568,37 @@ export class AIService {
       'image/tiff'
     ];
 
-    const supportedTypes = wrapperType === 'A' ? wrapperATypes : wrapperBTypes;
+    const wrapperCTypes = [
+      // All file types supported for general use
+      'image/jpeg',
+      'image/jpg', 
+      'image/png',
+      'image/gif',
+      'image/webp',
+      'image/bmp',
+      'image/tiff',
+      'application/pdf',
+      'application/msword',
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      'text/plain',
+      'text/csv',
+      'application/vnd.ms-excel',
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      'application/vnd.ms-powerpoint',
+      'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+      'text/xml',
+      'application/xml',
+      'application/zip'
+    ];
+
+    let supportedTypes;
+    if (wrapperType === 'A') {
+      supportedTypes = wrapperATypes;
+    } else if (wrapperType === 'B') {
+      supportedTypes = wrapperBTypes;
+    } else {
+      supportedTypes = wrapperCTypes;
+    }
     
     // Check file extension for PLC files (Wrapper B)
     if (wrapperType === 'B') {
@@ -469,7 +612,7 @@ export class AIService {
     return supportedTypes.includes(file.type);
   }
 
-  public getFileTypeCategory(file: File, wrapperType: 'A' | 'B' = 'A'): 'image' | 'document' | 'plc' | 'unsupported' {
+  public getFileTypeCategory(file: File, wrapperType: 'A' | 'B' | 'C' = 'A'): 'image' | 'document' | 'plc' | 'unsupported' {
     const imageTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp', 'image/bmp', 'image/tiff'];
     const documentTypes = [
       'application/pdf',

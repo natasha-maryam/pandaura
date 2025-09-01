@@ -799,7 +799,7 @@ export default function LogicStudio({ sessionMode = false }: LogicStudioProps) {
             {/* Prompt Input Field */}
             <textarea
               className={`flex-1 border border-light rounded-md px-4 py-3 bg-surface shadow-sm text-sm text-primary placeholder-muted resize-none focus:outline-none focus:ring-2 focus:ring-accent focus:border-accent transition-all ${
-                collapseLevel === 2 ? 'min-h-[40px] max-h-[80px]' : 'min-h-[60px] max-h-[120px]'
+                collapseLevel === 2 ? 'min-h-[40px] max-h-[80px]' : 'min-h-[60px] max-h-[60px]'
               }`}
               placeholder={collapseLevel === 2 ? "Describe logic..." : "Describe your logic requirements in natural language..."}
               value={prompt}
