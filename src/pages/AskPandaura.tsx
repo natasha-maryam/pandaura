@@ -27,9 +27,8 @@ import AutosaveStatus from "../components/ui/AutosaveStatus";
 import TypingIndicator from "../components/ui/TypingIndicator";
 import MemoryManager from "../components/ui/MemoryManager";
 import { aiService } from "../services/aiService";
-import { AIMessage, Conversation, WrapperAResponse, WrapperBResponse, WrapperCResponse, WrapperDResponse, StreamChunk, WrapperType, TaskType } from "../types/ai";
-import { CodeArtifactViewer } from "../components/ui/CodeArtifactViewer";
-import { TableArtifactViewer } from "../components/ui/TableArtifactViewer";
+import { AIMessage, Conversation, WrapperAResponse, WrapperBResponse, WrapperCResponse, WrapperDResponse, StreamChunk, WrapperType } from "../types/ai";
+
 import { parseMarkdownTables, removeMarkdownTables, parseCitations, removeCitations, parseProcessedFiles, removeProcessedFiles } from "../utils/markdownTableParser";
 
 interface AskPandauraProps {
@@ -264,6 +263,21 @@ export default function AskPandaura({ sessionMode = false }: AskPandauraProps) {
         setUploadingFiles(true);
         
         if (selectedWrapper === 'B') {
+          // Create new session ID for new file uploads to ensure fresh analysis
+          let currentSessionId = sessionId;
+          if (selectedFiles.length > 0) {
+            currentSessionId = aiService.generateSessionId();
+            setSessionId(currentSessionId);
+            console.log(`🔄 NEW FILES DETECTED - Creating fresh session: ${currentSessionId}`);
+            console.log(`📁 Files being uploaded:`, selectedFiles.map(f => f.name));
+            
+            // Don't clear conversation's uploaded files - they'll be updated after successful upload
+            console.log(`📂 Previous files in conversation:`, currentConversation?.uploadedFiles?.map(f => f.filename) || 'none');
+          } else {
+            console.log(`💬 FOLLOW-UP QUESTION - Using existing session: ${currentSessionId}`);
+            console.log(`📂 Previous files available:`, currentConversation?.uploadedFiles?.map(f => f.filename) || 'none');
+          }
+          
           // Use Wrapper B for document analysis with streaming support
           if (streamingEnabled) {
             setIsStreaming(true);
@@ -303,7 +317,7 @@ export default function AskPandaura({ sessionMode = false }: AskPandauraProps) {
               {
                 prompt: contextualPrompt,
                 projectId: projectId || undefined,
-                sessionId,
+                sessionId: currentSessionId, // Use the current session ID (new for files, existing for follow-ups)
                 files: selectedFiles,
                 stream: true,
               },
@@ -350,7 +364,26 @@ export default function AskPandaura({ sessionMode = false }: AskPandauraProps) {
                   if (typeof fullResponse === 'object' && fullResponse !== null) {
                     setCurrentConversation(prevConv => {
                       if (!prevConv) return prevConv;
-                      const updatedMessages = prevConv.messages.map(msg => 
+                      
+                      let updatedConv = { ...prevConv };
+                      
+                      // For Wrapper B with new files, update conversation's uploadedFiles
+                      if (selectedWrapper === 'B' && selectedFiles.length > 0 && (fullResponse as any).processed_files) {
+                        const uploadedFiles = selectedFiles.map(file => ({
+                          filename: file.name,
+                          type: file.type,
+                          size: file.size,
+                          uploadedAt: new Date(),
+                          processedData: (fullResponse as any).processed_files?.find((pf: any) => pf.filename === file.name)
+                        }));
+                        
+                        updatedConv.uploadedFiles = [
+                          ...(updatedConv.uploadedFiles || []),
+                          ...uploadedFiles
+                        ];
+                      }
+                      
+                      const updatedMessages = updatedConv.messages.map(msg => 
                         msg.id === streamingMessageId 
                           ? { 
                               ...msg, 
@@ -361,12 +394,30 @@ export default function AskPandaura({ sessionMode = false }: AskPandauraProps) {
                             }
                           : msg
                       );
-                      return { ...prevConv, messages: updatedMessages };
+                      return { ...updatedConv, messages: updatedMessages };
                     });
                     setConversations(prev => 
                       prev.map(conv => {
                         if (conv.id === conversation!.id) {
-                          const updatedMessages = conv.messages.map(msg => 
+                          let updatedConv = { ...conv };
+                          
+                          // For Wrapper B with new files, update conversation's uploadedFiles
+                          if (selectedWrapper === 'B' && selectedFiles.length > 0 && (fullResponse as any).processed_files) {
+                            const uploadedFiles = selectedFiles.map(file => ({
+                              filename: file.name,
+                              type: file.type,
+                              size: file.size,
+                              uploadedAt: new Date(),
+                              processedData: (fullResponse as any).processed_files?.find((pf: any) => pf.filename === file.name)
+                            }));
+                            
+                            updatedConv.uploadedFiles = [
+                              ...(updatedConv.uploadedFiles || []),
+                              ...uploadedFiles
+                            ];
+                          }
+                          
+                          const updatedMessages = updatedConv.messages.map(msg => 
                             msg.id === streamingMessageId 
                               ? { 
                                   ...msg, 
@@ -377,7 +428,7 @@ export default function AskPandaura({ sessionMode = false }: AskPandauraProps) {
                                 }
                               : msg
                           );
-                          return { ...conv, messages: updatedMessages };
+                          return { ...updatedConv, messages: updatedMessages };
                         }
                         return conv;
                       })
@@ -432,7 +483,7 @@ export default function AskPandaura({ sessionMode = false }: AskPandauraProps) {
           const wrapperBResponse = await aiService.analyzeDocumentsWithWrapperB({
             prompt: userMessage,
             projectId: projectId || undefined,
-            sessionId,
+            sessionId: currentSessionId, // Use the current session ID
             files: selectedFiles,
           });
           
@@ -504,12 +555,9 @@ export default function AskPandaura({ sessionMode = false }: AskPandauraProps) {
       } else {
         // Regular text message - check Wrapper B session context
         if (selectedWrapper === 'B') {
-          if (!currentConversation?.uploadedFiles?.length) {
-            setError("Document Analyst requires files to analyze. Please upload PLC files, documents, or images, or switch to General Assistant (Wrapper A).");
-            setIsLoading(false);
-            return;
-          }
-          // Session has files - allow text-only analysis to continue
+          // For Wrapper B, we'll let the backend validate if files are available
+          // The backend has session management and will return appropriate errors if needed
+          console.log(`💭 Wrapper B follow-up question with sessionId: ${sessionId}, uploadedFiles: ${currentConversation?.uploadedFiles?.length || 0}`);
         }
         
         // Regular text message for Wrapper A
@@ -537,17 +585,20 @@ export default function AskPandaura({ sessionMode = false }: AskPandauraProps) {
             prev.map(conv => conv.id === conversation!.id ? conversationWithStreaming : conv)
           );
           
-          const fullResponse = await aiService.sendStreamingMessage(
-            {
-              prompt: userMessage,
-              projectId: projectId || undefined,
-              sessionId,
-              stream: true,
-            },
-            (chunk: StreamChunk) => {
-              if (chunk.type === 'chunk' && chunk.content) {
-                setStreamContent(prev => {
-                  const newContent = prev + chunk.content;
+          let fullResponse: string;
+          
+          if (selectedWrapper === 'B') {
+            fullResponse = await aiService.sendWrapperBStreamingMessage(
+              {
+                prompt: userMessage,
+                projectId: projectId || undefined,
+                sessionId, // Use existing session for follow-up questions
+                files: [], // No new files, backend will use session files
+              },
+              (chunk: StreamChunk) => {
+                if (chunk.type === 'chunk' && chunk.content) {
+                  setStreamContent(prev => {
+                    const newContent = prev + chunk.content;
                   finalStreamContent = newContent; // Keep track of final content
                   
                   // Update the streaming message in real-time
@@ -680,6 +731,151 @@ export default function AskPandaura({ sessionMode = false }: AskPandauraProps) {
               }
             }
           );
+          } else {
+            fullResponse = await aiService.sendStreamingMessage(
+              {
+                prompt: userMessage,
+                projectId: projectId || undefined,
+                sessionId,
+                stream: true,
+              },
+              (chunk: StreamChunk) => {
+                if (chunk.type === 'chunk' && chunk.content) {
+                  setStreamContent(prev => {
+                    const newContent = prev + chunk.content;
+                    finalStreamContent = newContent; // Keep track of final content
+                    
+                    // Update the streaming message in real-time
+                    setCurrentConversation(prevConv => {
+                      if (!prevConv) return prevConv;
+                      const updatedMessages = prevConv.messages.map(msg => 
+                        msg.id === streamingMessageId 
+                          ? { ...msg, content: newContent || '' }
+                          : msg
+                      );
+                      return { ...prevConv, messages: updatedMessages };
+                    });
+                    setConversations(prev => 
+                      prev.map(conv => {
+                        if (conv.id === conversation!.id) {
+                          const updatedMessages = conv.messages.map(msg => 
+                            msg.id === streamingMessageId 
+                              ? { ...msg, content: newContent || '' }
+                              : msg
+                          );
+                          return { ...conv, messages: updatedMessages };
+                        }
+                        return conv;
+                      })
+                    );
+                    
+                    return newContent;
+                  });
+                } else if (chunk.type === 'complete' && chunk.answer) {
+                  // Use the complete answer from backend
+                  finalStreamContent = chunk.answer;
+                  setStreamContent(chunk.answer);
+                  setStreamComplete(true);
+                  
+                  // Extract artifacts from the full response if available
+                  let artifacts = undefined;
+                  let processedFiles = undefined;
+                  
+                  if (chunk.fullResponse && typeof chunk.fullResponse === 'object' && 'artifacts' in chunk.fullResponse) {
+                    // Both WrapperA and WrapperB now have the same artifact structure
+                    artifacts = (chunk.fullResponse as WrapperAResponse | WrapperBResponse).artifacts;
+                    processedFiles = (chunk.fullResponse as WrapperBResponse).processed_files;
+                  } else {
+                    // If no artifacts in response, try to parse tables and other data from markdown content
+                    console.log("Parsing content for tables:", chunk.answer);
+                    const parsedTables = parseMarkdownTables(chunk.answer);
+                    const parsedCitations = parseCitations(chunk.answer);
+                    const parsedFiles = parseProcessedFiles(chunk.answer);
+                    
+                    console.log("Parsed tables:", parsedTables);
+                    console.log("Parsed citations:", parsedCitations);
+                    console.log("Parsed files:", parsedFiles);
+                    
+                    if (parsedTables.length > 0 || parsedCitations.length > 0 || parsedFiles.length > 0) {
+                      artifacts = {
+                        code: [],
+                        tables: parsedTables,
+                        citations: parsedCitations,
+                        reports: [],
+                        anchors: []
+                      };
+                      processedFiles = parsedFiles;
+                    }
+                  }
+                  
+                  // Clean the content by removing parsed elements to avoid duplication
+                  let cleanContent = chunk.answer;
+                  if (artifacts?.tables && artifacts.tables.length > 0) {
+                    cleanContent = removeMarkdownTables(cleanContent);
+                  }
+                  if (artifacts?.citations && artifacts.citations.length > 0) {
+                    cleanContent = removeCitations(cleanContent);
+                  }
+                  if (processedFiles && processedFiles.length > 0) {
+                    cleanContent = removeProcessedFiles(cleanContent);
+                  }
+                  
+                  // Update the final message with artifacts
+                  setCurrentConversation(prevConv => {
+                    if (!prevConv) return prevConv;
+                    const updatedMessages = prevConv.messages.map(msg => 
+                      msg.id === streamingMessageId 
+                        ? { ...msg, content: cleanContent || '', isStreaming: false, artifacts, processedFiles }
+                        : msg
+                    );
+                    return { ...prevConv, messages: updatedMessages };
+                  });
+                  setConversations(prev => 
+                    prev.map(conv => {
+                      if (conv.id === conversation!.id) {
+                        const updatedMessages = conv.messages.map(msg => 
+                          msg.id === streamingMessageId 
+                            ? { ...msg, content: cleanContent || '', isStreaming: false, artifacts, processedFiles }
+                            : msg
+                        );
+                        return { ...conv, messages: updatedMessages };
+                      }
+                      return conv;
+                    })
+                  );
+                } else if (chunk.type === 'end') {
+                  setStreamComplete(true);
+                  setIsStreaming(false);
+                  
+                  // Mark streaming as complete
+                  setCurrentConversation(prevConv => {
+                    if (!prevConv) return prevConv;
+                    const updatedMessages = prevConv.messages.map(msg => 
+                      msg.id === streamingMessageId 
+                        ? { ...msg, isStreaming: false }
+                        : msg
+                    );
+                    return { ...prevConv, messages: updatedMessages };
+                  });
+                  setConversations(prev => 
+                    prev.map(conv => {
+                      if (conv.id === conversation!.id) {
+                        const updatedMessages = conv.messages.map(msg => 
+                          msg.id === streamingMessageId 
+                            ? { ...msg, isStreaming: false }
+                            : msg
+                        );
+                        return { ...conv, messages: updatedMessages };
+                      }
+                      return conv;
+                    })
+                  );
+                } else if (chunk.type === 'error') {
+                  throw new Error(chunk.error || 'Streaming error');
+                }
+              }
+            );
+          }
           
           // Use final streamed content or fallback to fullResponse
           const finalContent = finalStreamContent || fullResponse;
@@ -699,12 +895,23 @@ export default function AskPandaura({ sessionMode = false }: AskPandauraProps) {
           streamingHandled = true;
         } else {
           // Non-streaming request
-          response = await aiService.sendMessage({
-            prompt: userMessage,
-            projectId: projectId || undefined,
-            sessionId,
-            stream: false,
-          });
+          if (selectedWrapper === 'B') {
+            // For Wrapper B, use the document analysis method (will use session files if no new files)
+            response = await aiService.sendWrapperBMessage({
+              prompt: userMessage,
+              projectId: projectId || undefined,
+              sessionId,
+              files: [], // No new files, backend will use session files
+            });
+          } else {
+            // For Wrapper A
+            response = await aiService.sendMessage({
+              prompt: userMessage,
+              projectId: projectId || undefined,
+              sessionId,
+              stream: false,
+            });
+          }
         }
       }
 
@@ -830,11 +1037,22 @@ export default function AskPandaura({ sessionMode = false }: AskPandauraProps) {
   // Handle files selected
   const handleFilesSelected = (files: File[]) => {
     setSelectedFiles(files);
+    
+    if (files.length > 0 && selectedWrapper === 'B') {
+      console.log(`� New files selected:`, files.map(f => f.name));
+      console.log(`🔄 Fresh session will be created when message is sent`);
+    }
   };
 
   // Clear selected files
   const clearSelectedFiles = () => {
     setSelectedFiles([]);
+    if (selectedWrapper === 'B') {
+      // Also generate new session when clearing files
+      const newSessionId = aiService.generateSessionId();
+      setSessionId(newSessionId);
+      console.log(`🧹 Files cleared, created fresh session: ${newSessionId}`);
+    }
   };
 
   // Detect sidebar state changes
@@ -1291,7 +1509,7 @@ export default function AskPandaura({ sessionMode = false }: AskPandauraProps) {
         )}
 
         {/* Wrapper Selection */}
-        <div className="mb-3  mx-auto">
+        <div className="mb-3 mx-auto  max-w-[94%] ">
           <div className="flex items-center gap-4">
             <div className="flex items-center gap-2">
               <label className="text-sm font-medium text-gray-700">
@@ -1416,7 +1634,7 @@ export default function AskPandaura({ sessionMode = false }: AskPandauraProps) {
           </div>
         )}
 
-        <div className="flex items-end gap-3  mx-auto">
+        <div className="flex items-end gap-3   max-w-[94%] mx-auto">
           {/* Wider max width for full use of space */}
           <textarea
             value={chatMessage}
@@ -1468,7 +1686,8 @@ export default function AskPandaura({ sessionMode = false }: AskPandauraProps) {
                       );
                     }
                     if (validFiles.length > 0) {
-                      setSelectedFiles((prev) => [...prev, ...validFiles]);
+                      // Use handleFilesSelected to manage file selection
+                      handleFilesSelected(validFiles);
                       setError(null);
                     }
                   }

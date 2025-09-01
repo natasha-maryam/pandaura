@@ -84,6 +84,17 @@ export class AIService {
     return this.handleResponse(response);
   }
 
+  public async clearSession(sessionId: string): Promise<{ status: string; message: string }> {
+    const response = await fetch(`${this.baseUrl}/clearSession`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ sessionId }),
+    });
+    return this.handleResponse(response);
+  }
+
   public async sendMessage(request: WrapperARequest): Promise<WrapperAResponse> {
     if (request.stream) {
       throw new Error('Use sendStreamingMessage for streaming requests');
@@ -351,7 +362,34 @@ export class AIService {
     const response = await fetch(`${this.baseUrl}/wrapperB`, {
       method: 'POST',
       body: formData,
-    });    return this.handleResponse(response);
+    });
+    return this.handleResponse(response);
+  }
+
+  public async sendWrapperBMessage(request: WrapperBRequest): Promise<WrapperBResponse> {
+    const formData = new FormData();
+    formData.append('prompt', request.prompt);
+    
+    if (request.projectId) {
+      formData.append('projectId', request.projectId);
+    }
+    
+    if (request.sessionId) {
+      formData.append('sessionId', request.sessionId);
+    }
+
+    // Add files if provided (for new uploads)
+    if (request.files && request.files.length > 0) {
+      request.files.forEach((file) => {
+        formData.append('files', file);
+      });
+    }
+
+    const response = await fetch(`${this.baseUrl}/wrapperB`, {
+      method: 'POST',
+      body: formData,
+    });
+    return this.handleResponse(response);
   }
 
   public async sendWrapperCMessage(request: WrapperCRequest): Promise<WrapperCResponse> {
