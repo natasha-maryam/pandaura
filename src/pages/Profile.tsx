@@ -8,15 +8,9 @@ import {
   Shield, 
   Save,
   Upload,
-  Globe,
-  Bell,
   Monitor,
-  Eye,
-  EyeOff,
   Smartphone,
-  Download,
   LogOut,
-  Clock,
   AlertTriangle,
   ArrowLeft
 } from "lucide-react";
@@ -659,7 +653,7 @@ export default function Profile() {
       ) : (
         <>
           {/* Profile Header */}
-          <header className="bg-white border-b border-light px-6 py-4">
+          <header className="bg-white border-b border-light px-6 py-2">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-4">
                 <button

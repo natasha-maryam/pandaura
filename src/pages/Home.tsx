@@ -8,9 +8,9 @@ import {
   FileText, 
   Database, 
   Zap,
-  FolderOpen
+  FolderOpen,
+  LogOut
 } from "lucide-react";
-import logo from "../assets/logo.png";
 import { Card, Button } from "../components/ui";
 
 // Import components directly to avoid barrel export issues
@@ -190,7 +190,7 @@ export default function Home() {
   const navigate = useNavigate();
   const location = useLocation();
   const { projectId } = useParams();
-  const { isAuthenticated, isLoading, user, token } = useAuth();
+  const { isAuthenticated, isLoading, user, token, logout } = useAuth();
   const [showNewProjectModal, setShowNewProjectModal] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState<Project | null>(null);
   const [refreshTrigger, setRefreshTrigger] = useState(0);
@@ -346,18 +346,34 @@ export default function Home() {
       return (
         <div className="min-h-screen bg-background">
           {/* Header */}
-          <header className="flex items-center justify-between bg-surface px-6 py-4 border-b border-light">
-            <div className="flex items-center gap-3">
-              <img 
-                src={logo} 
-                alt="Pandaura Logo" 
-                className="h-16 w-auto filter-none" 
-                style={{ filter: 'none', imageRendering: 'crisp-edges' }}
-              />
+          <header className="flex items-center justify-between bg-surface px-6 py-2 border-b border-light">
+            <div className="flex items-center">
+              <button 
+                onClick={() => navigate('/home')} 
+                className="hover:opacity-80 transition-opacity font-bold text-lg text-primary"
+                title="Go to Home"
+                style={{ fontFamily: 'Inter, sans-serif' }}
+              >
+                <span className="text-black">Pandaura AS</span>{' '}
+                <span className="text-gray-500">v1</span>
+              </button>
+            </div>
+            <div className="flex items-center">
+              <button
+                onClick={() => {
+                  logout();
+                  navigate('/signin');
+                }}
+                className="flex items-center gap-2 px-3 py-1.5 text-sm text-red-600 hover:text-red-700 hover:bg-red-50 rounded-md transition-colors"
+                title="Sign Out"
+              >
+                <LogOut className="w-4 h-4" />
+                <span>Sign Out</span>
+              </button>
             </div>
           </header>
           
-          <div className="flex items-center justify-center" style={{ height: 'calc(100vh - 88px)' }}>
+          <div className="flex items-center justify-center" style={{ height: 'calc(100vh - 72px)' }}>
             <div className="text-center">
               <FolderOpen className="w-16 h-16 text-muted mx-auto mb-4" />
               <h3 className="text-lg font-medium text-primary mb-2">Project not found</h3>
@@ -377,14 +393,30 @@ export default function Home() {
     return (
       <div className="min-h-screen bg-background">
         {/* Header */}
-        <header className="flex items-center justify-between bg-surface px-6 py-4 border-b border-light shadow">
-          <div className="flex items-center gap-3">
-            <img 
-              src={logo} 
-              alt="Pandaura Logo" 
-              className="h-16 w-auto filter-none" 
-              style={{ filter: 'none', imageRendering: 'crisp-edges' }}
-            />
+        <header className="flex items-center justify-between bg-surface px-6 py-3 border-b ">
+          <div className="flex items-center">
+            <button 
+              onClick={() => navigate('/home')} 
+              className="hover:opacity-80 transition-opacity font-bold text-lg text-primary"
+              title="Go to Home"
+              style={{ fontFamily: 'Inter, sans-serif' }}
+            >
+              <span className="text-black">Pandaura AS</span>{' '}
+              <span className="text-gray-500">v1</span>
+            </button>
+          </div>
+          <div className="flex items-center">
+            <button
+              onClick={() => {
+                logout();
+                navigate('/signin');
+              }}
+              className="flex items-center gap-2 px-3 py-1.5 text-sm text-red-600 hover:text-red-700 hover:bg-red-50 rounded-md transition-colors"
+              title="Sign Out"
+            >
+              <LogOut className="w-4 h-4" />
+              <span>Sign Out</span>
+            </button>
           </div>
         </header>
 
@@ -428,14 +460,30 @@ export default function Home() {
     return (
       <div className="min-h-screen bg-background">
         {/* Header */}
-        <header className="flex items-center justify-between bg-surface px-6 py-4 border-b border-light">
-          <div className="flex items-center gap-3">
-            <img 
-              src={logo} 
-              alt="Pandaura Logo" 
-              className="h-16 w-auto filter-none" 
-              style={{ filter: 'none', imageRendering: 'crisp-edges' }}
-            />
+        <header className="flex items-center justify-between bg-surface px-6 py-3 border-b border-light">
+          <div className="flex items-center">
+            <button 
+              onClick={() => navigate('/home')} 
+              className="hover:opacity-80 transition-opacity font-bold text-lg text-primary"
+              title="Go to Home"
+              style={{ fontFamily: 'Inter, sans-serif' }}
+            >
+              <span className="text-black">Pandaura AS</span>{' '}
+              <span className="text-gray-500">v1</span>
+            </button>
+          </div>
+          <div className="flex items-center">
+            <button
+              onClick={() => {
+                logout();
+                navigate('/signin');
+              }}
+              className="flex items-center gap-2 px-3 py-1.5 text-sm text-red-600 hover:text-red-700 hover:bg-red-50 rounded-md transition-colors"
+              title="Sign Out"
+            >
+              <LogOut className="w-4 h-4" />
+              <span>Sign Out</span>
+            </button>
           </div>
         </header>
 
@@ -469,14 +517,30 @@ export default function Home() {
     return (
       <div className="min-h-screen bg-background">
         {/* Header */}
-        <header className="flex items-center justify-between bg-surface px-6 py-4 border-b border-light shadow">
-          <div className="flex items-center gap-3">
-            <img 
-              src={logo} 
-              alt="Pandaura Logo" 
-              className="h-16 w-auto filter-none" 
-              style={{ filter: 'none', imageRendering: 'crisp-edges' }}
-            />
+        <header className="flex items-center justify-between bg-surface px-6 py-2 border-b border-light shadow">
+          <div className="flex items-center">
+            <button 
+              onClick={() => navigate('/home')} 
+              className="hover:opacity-80 transition-opacity font-bold text-lg text-primary"
+              title="Go to Home"
+              style={{ fontFamily: 'Inter, sans-serif' }}
+            >
+              <span className="text-black">Pandaura AS</span>{' '}
+              <span className="text-gray-500">v1</span>
+            </button>
+          </div>
+          <div className="flex items-center">
+            <button
+              onClick={() => {
+                logout();
+                navigate('/signin');
+              }}
+              className="flex items-center gap-2 px-3 py-1.5 text-sm text-red-600 hover:text-red-700 hover:bg-red-50 rounded-md transition-colors"
+              title="Sign Out"
+            >
+              <LogOut className="w-4 h-4" />
+              <span>Sign Out</span>
+            </button>
           </div>
         </header>
 
@@ -492,14 +556,30 @@ export default function Home() {
   return (
     <div className="min-h-screen bg-background">
       {/* Header */}
-      <header className="flex items-center justify-between bg-surface px-6 py-4 border-b border-light">
-        <div className="flex items-center gap-3">
-          <img 
-            src={logo} 
-            alt="Pandaura Logo" 
-            className="h-16 w-auto filter-none" 
-            style={{ filter: 'none', imageRendering: 'crisp-edges' }}
-          />
+      <header className="flex items-center justify-between bg-surface px-6 py-3 border-b border-light">
+        <div className="flex items-center">
+          <button 
+            onClick={() => navigate('/home')} 
+            className="hover:opacity-80 transition-opacity font-bold text-lg text-primary"
+            title="Go to Home"
+            style={{ fontFamily: 'Inter, sans-serif' }}
+          >
+            <span className="text-black">Pandaura AS</span>{' '}
+            <span className="text-gray-500">v1</span>
+          </button>
+        </div>
+        <div className="flex items-center">
+          <button
+            onClick={() => {
+              logout();
+              navigate('/signin');
+            }}
+            className="flex items-center gap-2 px-3 py-1.5 text-sm text-red-600 hover:text-red-700 hover:bg-red-50 rounded-md transition-colors"
+            title="Sign Out"
+          >
+            <LogOut className="w-4 h-4" />
+            <span>Sign Out</span>
+          </button>
         </div>
       </header>
 

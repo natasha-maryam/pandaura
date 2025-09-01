@@ -13,10 +13,8 @@ import {
   User,
   LogOut,
 } from "lucide-react";
-import logo from "../assets/logo.png";
 import PandauraOrb from "../components/PandauraOrb";
 import { useModuleState } from "../contexts/ModuleStateContext";
-import { config, getHostInfo, isOffline } from "../config/environment";
 import { useProjectNavigationProtection } from "../hooks/useNavigationProtection";
 import { useAuth } from "../contexts/AuthContext";
 
@@ -281,42 +279,31 @@ export default function SharedLayout({ children }: SharedLayoutProps) {
   }, [navigate]);
 
   const renderHeader = () => {
-    const hostInfo = getHostInfo();
-    const offline = isOffline();
-    
     return (
-      <header className="flex items-center justify-between bg-surface px-6 py-4 border-b border-light">
-        <div className="flex items-center gap-3">
+      <header className="flex items-center justify-between bg-surface px-6 py-3 border-b ">
+        <div className="flex items-center">
           <button 
             onClick={handleLogoClick} 
-            className="hover:opacity-80 transition-opacity"
+            className="hover:opacity-80 transition-opacity font-bold text-lg text-primary"
             title="Go to Home"
+            style={{ fontFamily: 'Inter, sans-serif' }}
           >
-            <img 
-              src={logo} 
-              alt="Pandaura Logo" 
-              className="h-16 w-auto filter-none" 
-              style={{ filter: 'none', imageRendering: 'crisp-edges' }}
-            />
+            <span className="text-black">Pandaura AS</span>{' '}
+            <span className="text-gray-500">v1</span>
           </button>
-          {config.onPremise.showStatus && (
-            <div className="flex flex-col text-xs">
-              <span className="text-primary font-medium">
-                {config.appTitle}
-              </span>
-              <span className="text-muted">
-                Running on {hostInfo.displayUrl}
-                {offline && " (Offline Mode)"}
-              </span>
-            </div>
-          )}
         </div>
         <div className="flex items-center space-x-4">
-          {offline && (
-            <div className="bg-yellow-100 border border-yellow-200 text-yellow-800 px-2 py-1 rounded text-xs">
-              Offline Mode
-            </div>
-          )}
+          <button
+            onClick={() => {
+              logout();
+              navigate('/signin');
+            }}
+            className="flex items-center gap-2 px-3 py-1.5 text-sm text-red-600 hover:text-red-700 hover:bg-red-50 rounded-md transition-colors"
+            title="Sign Out"
+          >
+            <LogOut className="w-4 h-4" />
+            <span>Sign Out</span>
+          </button>
         </div>
       </header>
     );
@@ -325,13 +312,13 @@ export default function SharedLayout({ children }: SharedLayoutProps) {
   const renderSidebar = useMemo(() => (
     <div
       ref={containerRef}
-      className="h-full bg-gray-light border-r border-light p-2 space-y-4 transition-all duration-200 will-change-transform w-16"
+      className="h-screen bg-gray-light border-r border-light p-2 space-y-4 transition-all duration-200 will-change-transform w-16 flex flex-col"
       style={{ scrollBehavior: 'smooth' }}
     >
       {/* Remove toggle button since sidebar is always collapsed */}
 
       {/* Profile and Integration Icons */}
-      <div className="space-y-2 pb-4 border-b border-light/50">
+      <div className="space-y-2  border-b border-light/50">
         {/* Profile Icon with click dropdown */}
         <div 
           ref={profileRef}
@@ -420,10 +407,10 @@ export default function SharedLayout({ children }: SharedLayoutProps) {
   );
 
   return (
-    <div className="flex flex-col h-screen bg-background text-primary">
-      {renderHeader()}
-      <div className="flex flex-1 overflow-hidden min-w-0">
-        {renderSidebar}
+    <div className="flex h-screen bg-background text-primary">
+      {renderSidebar}
+      <div className="flex flex-col flex-1">
+        {renderHeader()}
         <div className="flex-1 overflow-y-auto will-change-scroll" style={{ scrollBehavior: 'smooth' }}>{children}</div>
       </div>
       <PandauraOrb />

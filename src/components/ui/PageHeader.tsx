@@ -33,7 +33,7 @@ export default function PageHeader({
   };
 
   return (
-    <header className={`bg-surface border-b border-light px-6 py-4 ${className}`}>
+    <header className={`bg-surface border-b border-light px-6 py-3 ${className}`}>
       <div className="max-w-6xl mx-auto flex items-center justify-between">
         <div className="flex items-center gap-4">
           {showBackButton && (
