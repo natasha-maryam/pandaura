@@ -322,6 +322,10 @@ export default function AskPandaura({ sessionMode = false }: AskPandauraProps) {
                 stream: true,
               },
               (chunk: StreamChunk) => {
+                console.log('📡 Received chunk type:', chunk.type);
+                if (chunk.artifacts) {
+                  console.log('📦 Chunk has artifacts! Type:', chunk.type, 'Code count:', chunk.artifacts.code?.length || 0);
+                }
                 if (chunk.type === 'status') {
                   // Show status updates for file processing
                   setCurrentConversation(prevConv => {
@@ -357,6 +361,8 @@ export default function AskPandaura({ sessionMode = false }: AskPandauraProps) {
                   });
                 } else if (chunk.type === 'artifacts' && chunk.artifacts) {
                   // Handle immediate artifact chunks
+                  console.log('🎯 ARTIFACTS RECEIVED:', chunk.artifacts);
+                  console.log('🎯 Code artifacts count:', chunk.artifacts.code?.length || 0);
                   setCurrentConversation(prevConv => {
                     if (!prevConv) return prevConv;
                     const updatedMessages = prevConv.messages.map(msg => 
@@ -373,6 +379,7 @@ export default function AskPandaura({ sessionMode = false }: AskPandauraProps) {
                           }
                         : msg
                     );
+                    console.log('🎯 Updated message with artifacts:', updatedMessages.find(m => m.id === streamingMessageId)?.artifacts);
                     return { ...prevConv, messages: updatedMessages };
                   });
                   setConversations(prev => 
@@ -400,6 +407,12 @@ export default function AskPandaura({ sessionMode = false }: AskPandauraProps) {
                 } else if (chunk.type === 'complete' && chunk.fullResponse) {
                   // Store the complete response data for artifacts
                   finalStreamContent = chunk.answer || finalStreamContent;
+                  
+                  console.log('🏁 COMPLETE EVENT RECEIVED');
+                  console.log('🏁 chunk.fullResponse type:', typeof chunk.fullResponse);
+                  console.log('🏁 chunk.fullResponse:', chunk.fullResponse);
+                  console.log('🏁 chunk.fullResponse.artifacts:', (chunk.fullResponse as any)?.artifacts);
+                  console.log('🏁 Code artifacts in complete:', (chunk.fullResponse as any)?.artifacts?.code?.length || 0);
                   
                   // Type guard for fullResponse
                   const fullResponse = chunk.fullResponse;
