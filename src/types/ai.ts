@@ -129,11 +129,16 @@ export interface HealthResponse {
 
 // Streaming response types
 export interface StreamChunk {
-  type: 'chunk' | 'end' | 'error' | 'complete' | 'status' | 'start';
+  type: 'chunk' | 'end' | 'error' | 'complete' | 'status' | 'start' | 'artifacts';
   content?: string;
   fullResponse?: string | WrapperAResponse;
   answer?: string;
   error?: string;
+  artifacts?: {
+    code?: any[];
+  };
+  chunkIndex?: number;
+  totalChunks?: number;
 }
 
 // Document upload types
