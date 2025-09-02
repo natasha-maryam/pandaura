@@ -16,6 +16,7 @@ import {
   FileText,
   Brain,
   AlertCircle,
+  ArrowUp,
 } from "lucide-react";
 import pandauraLogo from "../assets/chatlogo.jpg";
 import logo from "../assets/logo.png";
@@ -1517,7 +1518,7 @@ export default function AskPandaura({ sessionMode = false }: AskPandauraProps) {
 
       {/* Fixed Bottom Input */}
       <div
-        className={`fixed bottom-0 right-0 bg-white border-t px-6 py-4 shadow-md z-30 transition-all duration-200 ${
+        className={`fixed bottom-0 right-0 bg-white px-6 py-4 shadow-md z-30 transition-all duration-200 ${
           sidebarCollapsed ? "left-16" : "left-72"
         }`}
       >
@@ -1708,127 +1709,133 @@ export default function AskPandaura({ sessionMode = false }: AskPandauraProps) {
           </div>
         )}
 
-        <div className="flex items-end gap-3   max-w-[94%] mx-auto">
-          {/* Wider max width for full use of space */}
-          <textarea
-            value={chatMessage}
-            onChange={(e) => setChatMessage(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter" && !e.shiftKey) {
-                e.preventDefault();
-                sendMessage();
-              }
-            }}
-            placeholder={
-              selectedWrapper === "A"
-                ? selectedFiles.length > 0
-                  ? "Files are not supported in Code Generator mode. Switch to Document Analyst or clear files."
-                  : "Ask about PLCs, SCADA, HMI, robotics, motor control, or request code generation..."
-                : selectedFiles.length > 0
-                ? "Ask about the uploaded files or add additional instructions..."
-                : "Upload PLC files, documents, or images for analysis..."
-            }
-            className="flex-1 border border-light rounded-md px-4 py-2 bg-surface shadow-sm text-sm text-primary placeholder-muted resize-none focus:outline-none focus:ring-2 focus:ring-accent focus:border-accent transition-all min-h-[36px] max-h-[120px]"
-            rows={1}
-            style={{ height: "auto" }}
-            onInput={(e) => {
-              const target = e.target as HTMLTextAreaElement;
-              target.style.height = "auto";
-              target.style.height = Math.min(target.scrollHeight, 120) + "px";
-            }}
-          />
-          <div className="flex gap-2">
-            <div className="relative">
-              <input
-                type="file"
-                multiple
-                accept="image/*,.pdf,.doc,.docx,.txt,.csv,.xls,.xlsx,.ppt,.pptx"
-                onChange={(e) => {
-                  const files = Array.from(e.target.files || []);
-                  if (files.length > 0) {
-                    // Validate file types based on selected wrapper
-                    const validFiles = files.filter((file) =>
-                      aiService.isFileSupported(file, selectedWrapper)
+        <div className="max-w-[94%] mx-auto">
+          {/* ChatGPT-style input container */}
+          <div className="relative bg-surface shadow-sm">
+            
+            {/* Hidden file input */}
+            <input
+              type="file"
+              multiple
+              accept="image/*,.pdf,.doc,.docx,.txt,.csv,.xls,.xlsx,.ppt,.pptx"
+              onChange={(e) => {
+                const files = Array.from(e.target.files || []);
+                if (files.length > 0) {
+                  // Validate file types based on selected wrapper
+                  const validFiles = files.filter((file) =>
+                    aiService.isFileSupported(file, selectedWrapper)
+                  );
+                  if (validFiles.length !== files.length) {
+                    const supportedTypes =
+                      selectedWrapper === "A"
+                        ? "images (PNG, JPG, GIF) or documents (PDF, DOC, TXT, CSV, XLS, PPT)"
+                        : "PLC files (.xml, .l5x, .st, .zip), documents (PDF, DOC, TXT, CSV), or images";
+                    setError(
+                      `Some files are not supported. Please use ${supportedTypes}.`
                     );
-                    if (validFiles.length !== files.length) {
-                      const supportedTypes =
-                        selectedWrapper === "A"
-                          ? "images (PNG, JPG, GIF) or documents (PDF, DOC, TXT, CSV, XLS, PPT)"
-                          : "PLC files (.xml, .l5x, .st, .zip), documents (PDF, DOC, TXT, CSV), or images";
-                      setError(
-                        `Some files are not supported. Please use ${supportedTypes}.`
-                      );
-                    }
-                    if (validFiles.length > 0) {
-                      // Use handleFilesSelected to manage file selection
-                      handleFilesSelected(validFiles);
-                      setError(null);
-                    }
                   }
-                  // Reset input value to allow same file selection again
-                  e.target.value = "";
-                }}
-                className="hidden"
-                id="file-upload"
-                disabled={
-                  selectedWrapper === "A" ||
-                  isLoading ||
-                  isStreaming ||
-                  uploadingFiles
+                  if (validFiles.length > 0) {
+                    // Use handleFilesSelected to manage file selection
+                    handleFilesSelected(validFiles);
+                    setError(null);
+                  }
                 }
-              />
-              <button
-                onClick={() =>
-                  selectedWrapper === "B"
-                    ? document.getElementById("file-upload")?.click()
-                    : null
-                }
-                className={`border p-3 rounded-md transition-colors shadow-sm relative ${
-                  selectedWrapper === "A"
-                    ? "bg-gray-100 border-gray-300 text-gray-400 cursor-not-allowed"
-                    : selectedFiles.length > 0
-                    ? "bg-blue-100 border-blue-300 text-blue-600"
-                    : "bg-white border-light text-primary hover:bg-accent-light"
-                }`}
-                title={
-                  selectedWrapper === "A"
-                    ? "File upload is disabled for Code Generator mode"
-                    : "Upload PLC files, documents, or images"
-                }
-                disabled={
-                  selectedWrapper === "A" ||
-                  isLoading ||
-                  isStreaming ||
-                  uploadingFiles
-                }
-              >
-                <UploadCloud className="w-4 h-4" />
-                {selectedFiles.length > 0 && (
-                  <span className="absolute -top-1 -right-1 bg-blue-500 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center">
-                    {selectedFiles.length}
-                  </span>
-                )}
-              </button>
-            </div>
-            <button
-              onClick={sendMessage}
-              className="bg-primary text-white px-6 py-3 rounded-md hover:bg-secondary transition-colors text-sm font-medium shadow-sm disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                // Reset input value to allow same file selection again
+                e.target.value = "";
+              }}
+              className="hidden"
+              id="file-upload"
               disabled={
-                (!chatMessage.trim() && selectedFiles.length === 0) ||
+                selectedWrapper === "A" ||
+                isLoading ||
+                isStreaming ||
+                uploadingFiles
+              }
+            />
+
+            {/* Plus button inside textarea on the left */}
+            <button
+              onClick={() =>
+                selectedWrapper === "B"
+                  ? document.getElementById("file-upload")?.click()
+                  : null
+              }
+              className={`absolute left-3 bottom-3 z-10 w-8 h-8 rounded-full flex items-center justify-center transition-all duration-200 ${
+                selectedWrapper === "A"
+                  ? "bg-gray-100 text-gray-400 cursor-not-allowed"
+                  : selectedFiles.length > 0
+                  ? "bg-blue-500 text-white hover:bg-blue-600"
+                  : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+              }`}
+              title={
+                selectedWrapper === "A"
+                  ? "File upload is disabled for Code Generator mode"
+                  : "Upload PLC files, documents, or images"
+              }
+              disabled={
+                selectedWrapper === "A" ||
                 isLoading ||
                 isStreaming ||
                 uploadingFiles
               }
             >
-              {isLoading || uploadingFiles ? (
-                <>
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                  {uploadingFiles ? "Processing..." : ""}
-                </>
+              {selectedFiles.length > 0 ? (
+                <span className="text-xs font-medium">{selectedFiles.length}</span>
               ) : (
-                <Send className="w-4 h-4" />
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                </svg>
               )}
             </button>
+
+            {/* Textarea */}
+            <textarea
+              value={chatMessage}
+              onChange={(e) => setChatMessage(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && !e.shiftKey) {
+                  e.preventDefault();
+                  sendMessage();
+                }
+              }}
+              placeholder={
+                selectedWrapper === "A"
+                  ? selectedFiles.length > 0
+                    ? "Files are not supported in Code Generator mode. Switch to Document Analyst or clear files."
+                    : "Ask about PLCs, SCADA, HMI, robotics, motor control, or request code generation..."
+                  : selectedFiles.length > 0
+                  ? "Ask about the uploaded files or add additional instructions..."
+                  : "Upload PLC files, documents, or images for analysis..."
+              }
+              className="w-full bg-transparent rounded-full pl-14 pr-14 py-3 shadow-md text-sm text-gray-900 placeholder-gray-500 resize-none outline-none border border-gray-300 focus-within:ring-2 focus-within:ring-accent focus-within:border-transparent transition-all duration-200 min-h-[48px] max-h-[120px]"
+              rows={1}
+              style={{ height: "auto" }}
+              onInput={(e) => {
+                const target = e.target as HTMLTextAreaElement;
+                target.style.height = "auto";
+                target.style.height = Math.min(target.scrollHeight, 120) + "px";
+              }}
+            />
+
+            {/* Send button - shows as arrow up in circle when there's text */}
+            {(chatMessage.trim() || selectedFiles.length > 0) && (
+              <button
+                onClick={sendMessage}
+                className="absolute right-3 bottom-3 w-9 h-9 bg-black text-white rounded-full flex items-center justify-center hover:bg-gray-800 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+                disabled={
+                  (!chatMessage.trim() && selectedFiles.length === 0) ||
+                  isLoading ||
+                  isStreaming ||
+                  uploadingFiles
+                }
+              >
+                {isLoading || uploadingFiles ? (
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                ) : (
+                  <ArrowUp  className="w-6 h-6"/>
+                )}
+              </button>
+            )}
           </div>
         </div>
       </div>
