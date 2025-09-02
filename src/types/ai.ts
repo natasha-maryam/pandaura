@@ -135,7 +135,20 @@ export interface StreamChunk {
   answer?: string;
   error?: string;
   artifacts?: {
-    code?: any[];
+    code?: CodeArtifact[];
+    tables?: TableArtifact[];
+    citations?: string[];
+    diff?: string;
+    reports?: Array<{
+      title: string;
+      content_md: string;
+    }>;
+    anchors?: Array<{
+      id: string;
+      file: string;
+      page?: number;
+      note: string;
+    }>;
   };
   chunkIndex?: number;
   totalChunks?: number;

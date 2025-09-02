@@ -363,6 +363,7 @@ export default function AskPandaura({ sessionMode = false }: AskPandauraProps) {
                   // Handle immediate artifact chunks
                   console.log('🎯 ARTIFACTS RECEIVED:', chunk.artifacts);
                   console.log('🎯 Code artifacts count:', chunk.artifacts.code?.length || 0);
+                  console.log('🎯 Chunk index:', (chunk as any).chunkIndex, 'of', (chunk as any).totalChunks);
                   setCurrentConversation(prevConv => {
                     if (!prevConv) return prevConv;
                     const updatedMessages = prevConv.messages.map(msg => 
@@ -370,16 +371,32 @@ export default function AskPandaura({ sessionMode = false }: AskPandauraProps) {
                         ? { 
                             ...msg, 
                             artifacts: {
-                              ...(msg.artifacts || { code: [], tables: [], citations: [] }),
                               code: [
                                 ...(msg.artifacts?.code || []),
                                 ...(chunk.artifacts?.code || [])
-                              ]
+                              ],
+                              tables: [
+                                ...(msg.artifacts?.tables || []),
+                                ...(chunk.artifacts?.tables || [])
+                              ],
+                              citations: [
+                                ...(msg.artifacts?.citations || []),
+                                ...(chunk.artifacts?.citations || [])
+                              ],
+                              reports: [
+                                ...(msg.artifacts?.reports || []),
+                                ...(chunk.artifacts?.reports || [])
+                              ],
+                              anchors: [
+                                ...(msg.artifacts?.anchors || []),
+                                ...(chunk.artifacts?.anchors || [])
+                              ],
+                              diff: chunk.artifacts?.diff || msg.artifacts?.diff
                             }
                           }
                         : msg
                     );
-                    console.log('🎯 Updated message with artifacts:', updatedMessages.find(m => m.id === streamingMessageId)?.artifacts);
+                    console.log('🎯 Updated message with artifacts. Total code files now:', updatedMessages.find(m => m.id === streamingMessageId)?.artifacts?.code?.length || 0);
                     return { ...prevConv, messages: updatedMessages };
                   });
                   setConversations(prev => 
@@ -413,6 +430,8 @@ export default function AskPandaura({ sessionMode = false }: AskPandauraProps) {
                   console.log('🏁 chunk.fullResponse:', chunk.fullResponse);
                   console.log('🏁 chunk.fullResponse.artifacts:', (chunk.fullResponse as any)?.artifacts);
                   console.log('🏁 Code artifacts in complete:', (chunk.fullResponse as any)?.artifacts?.code?.length || 0);
+                  console.log('🏁 artifactsSentInChunks:', (chunk as any)?.artifactsSentInChunks);
+                  console.log('🏁 totalFiles:', (chunk as any)?.totalFiles);
                   
                   // Type guard for fullResponse
                   const fullResponse = chunk.fullResponse;
