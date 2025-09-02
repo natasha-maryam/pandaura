@@ -355,6 +355,48 @@ export default function AskPandaura({ sessionMode = false }: AskPandauraProps) {
                     );
                     return { ...prevConv, messages: updatedMessages };
                   });
+                } else if (chunk.type === 'artifacts' && chunk.artifacts) {
+                  // Handle immediate artifact chunks
+                  setCurrentConversation(prevConv => {
+                    if (!prevConv) return prevConv;
+                    const updatedMessages = prevConv.messages.map(msg => 
+                      msg.id === streamingMessageId 
+                        ? { 
+                            ...msg, 
+                            artifacts: {
+                              ...(msg.artifacts || { code: [], tables: [], citations: [] }),
+                              code: [
+                                ...(msg.artifacts?.code || []),
+                                ...(chunk.artifacts?.code || [])
+                              ]
+                            }
+                          }
+                        : msg
+                    );
+                    return { ...prevConv, messages: updatedMessages };
+                  });
+                  setConversations(prev => 
+                    prev.map(conv => {
+                      if (conv.id === conversation!.id) {
+                        const updatedMessages = conv.messages.map(msg => 
+                          msg.id === streamingMessageId 
+                            ? { 
+                                ...msg, 
+                                artifacts: {
+                                  ...(msg.artifacts || { code: [], tables: [], citations: [] }),
+                                  code: [
+                                    ...(msg.artifacts?.code || []),
+                                    ...(chunk.artifacts?.code || [])
+                                  ]
+                                }
+                              }
+                            : msg
+                        );
+                        return { ...conv, messages: updatedMessages };
+                      }
+                      return conv;
+                    })
+                  );
                 } else if (chunk.type === 'complete' && chunk.fullResponse) {
                   // Store the complete response data for artifacts
                   finalStreamContent = chunk.answer || finalStreamContent;
