@@ -3,6 +3,7 @@ import { ArrowRight, Trash2 } from 'lucide-react';
 import { Button } from '../ui';
 import { Project } from './types';
 import { getStatusColor, getVendorColor, getClientColor } from './colors';
+import { capitalizeFirstLetter } from '../../utils/textUtils';
 
 interface ProjectTableProps {
   projects: Project[];
@@ -35,17 +36,17 @@ export default function ProjectTable({ projects, onOpenOverview, onDelete }: Pro
               <td className="p-4">
                 <div>
                   <h3 className="text-lg font-semibold text-primary">{project.name}</h3>
-                  <p className="text-sm text-muted mt-1">{project.description}</p>
+                  <p className="text-sm text-muted mt-1">{capitalizeFirstLetter(project.description)}</p>
                 </div>
               </td>
               <td className="p-4">
                 <span className={`px-2 py-1 rounded text-xs font-medium ${getClientColor(project.client)}`}>
-                  {project.client}
+                  {capitalizeFirstLetter(project.client)}
                 </span>
               </td>
               <td className="p-4">
                 <span className={`px-2 py-1 rounded text-xs font-medium ${getVendorColor(project.vendor)}`}>
-                  {project.vendor}
+                  {capitalizeFirstLetter(project.vendor)}
                 </span>
               </td>
               <td className="p-4">

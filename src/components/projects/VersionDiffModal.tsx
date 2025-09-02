@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Modal, Button } from '../ui';
 import { ProjectVersion, ProjectsAPI } from './api';
 import { FileText, RotateCcw, Download, Code, Database, MessageSquare, Clock, ChevronDown, ChevronRight } from 'lucide-react';
+import { capitalizeFirstLetter } from '../../utils/textUtils';
 
 interface VersionDiffModalProps {
   version: ProjectVersion | null;
@@ -198,9 +199,9 @@ export default function VersionDiffModal({ version, onClose, onRollback, onExpor
         },
         projectInfo: {
           'Project Name': logicData.projectName || fullVersionData.projectMetadata?.project_name || 'Unnamed Project',
-          'Client Name': logicData.clientName || 'No client specified',
-          'Project Type': logicData.projectType || 'Not specified',
-          'Description': logicData.description || 'No description',
+          'Client Name': capitalizeFirstLetter(logicData.clientName || 'No client specified'),
+          'Project Type': capitalizeFirstLetter(logicData.projectType || 'Not specified'),
+          'Description': capitalizeFirstLetter(logicData.description || 'No description'),
           'Module': logicData.module || 'LogicStudio'
         },
         codeContent: {

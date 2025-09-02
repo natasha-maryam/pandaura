@@ -3,6 +3,7 @@ import { Button, Card, Alert } from '../components/ui';
 import { useAuth } from '../contexts/AuthContext';
 import { ProjectsAPI } from '../components/projects/api';
 import { useProjects } from '../components/projects/hooks';
+import { capitalizeFirstLetter } from '../utils/textUtils';
 
 interface DebugInfo {
   auth: {
@@ -194,9 +195,9 @@ export default function ProjectsDebugPage() {
                       <div key={project.id || index} className="border-b border-gray-200 pb-2 mb-2 last:border-b-0">
                         <div className="font-medium">{project.project_name}</div>
                         <div className="text-sm text-gray-600">
-                          Client: {project.client_name || 'N/A'} | 
-                          Type: {project.project_type || 'N/A'} | 
-                          Vendor: {project.target_plc_vendor || 'N/A'}
+                          Client: {capitalizeFirstLetter(project.client_name || 'N/A')} | 
+                          Type: {capitalizeFirstLetter(project.project_type || 'N/A')} | 
+                          Vendor: {capitalizeFirstLetter(project.target_plc_vendor || 'N/A')}
                         </div>
                         <div className="text-xs text-gray-500">
                           Created: {new Date(project.created_at).toLocaleString()}

@@ -3,6 +3,7 @@ import { ArrowRight, Trash2 } from 'lucide-react';
 import { Button } from '../ui';
 import { Project } from './types';
 import { getStatusColor, getVendorColor, getClientColor } from './colors';
+import { capitalizeFirstLetter } from '../../utils/textUtils';
 
 interface ProjectCardProps {
   project: Project;
@@ -27,18 +28,18 @@ export default function ProjectCard({ project, onOpenOverview, onDelete }: Proje
             <div>
               <span className="font-medium">Client:</span>
               <span className={`ml-2 px-2 py-1 rounded text-xs font-medium ${getClientColor(project.client)}`}>
-                {project.client}
+                {capitalizeFirstLetter(project.client)}
               </span>
             </div>
             <div>
               <span className="font-medium">Vendor:</span>
               <span className={`ml-2 px-2 py-1 rounded text-xs font-medium ${getVendorColor(project.vendor)}`}>
-                {project.vendor}
+                {capitalizeFirstLetter(project.vendor)}
               </span>
             </div>
             <div><span className="font-medium">Modified:</span> {project.lastModified}</div>
           </div>
-          <p className="text-sm text-muted">{project.description}</p>
+          <p className="text-sm text-muted">{capitalizeFirstLetter(project.description)}</p>
         </div>
         <div className="flex items-center gap-2 ml-4">
           <Button

@@ -8,6 +8,7 @@ import { useVersionControl } from '../../hooks/useVersionControl';
 import VersionHistory from './VersionHistory';
 import VersionDiffModal from './VersionDiffModal';
 import ErrorBoundary from '../ErrorBoundary';
+import { capitalizeFirstLetter } from '../../utils/textUtils';
 
 import { getStatusColor, getVendorColor, getClientColor } from './colors';
 
@@ -335,19 +336,19 @@ const {
               <div className='flex flex-col gap-2'>
                 <label className="text-sm font-medium text-secondary">Client</label>
                 <span className={`px-2 py-1 rounded text-xs font-medium w-fit ${getClientColor(displayProject.client)}`}>
-                  {displayProject.client}
+                  {capitalizeFirstLetter(displayProject.client)}
                 </span>
               </div>
               <div className='flex flex-col'>
                 <label className="text-sm font-medium text-secondary">Type</label>
-                <p className="text-primary w-fit">{displayProject.type}</p>
+                <p className="text-primary w-fit">{capitalizeFirstLetter(displayProject.type)}</p>
               </div>
             </div>
             <div className="space-y-4">
               <div className='flex flex-col gap-2'>
                 <label className="text-sm font-medium text-secondary">Target PLC Vendor</label>
                 <span className={`px-2 py-1 rounded text-xs font-medium w-fit ${getVendorColor(displayProject.vendor)}`}>
-                  {displayProject.vendor}
+                  {capitalizeFirstLetter(displayProject.vendor)}
                 </span>
               </div>
               <div className='flex flex-col gap-2'>
@@ -358,7 +359,7 @@ const {
               </div>
               <div>
                 <label className="text-sm font-medium text-secondary">Description</label>
-                <p className="text-primary">{displayProject.description}</p>
+                <p className="text-primary">{capitalizeFirstLetter(displayProject.description)}</p>
               </div>
             </div>
           </div>
