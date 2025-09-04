@@ -1,4 +1,4 @@
-module.exports = {
+export default {
   content: ["./src/**/*.{js,jsx,ts,tsx}"],
   theme: {
     extend: {
@@ -26,6 +26,8 @@ module.exports = {
         'error-light': 'rgba(216, 76, 62, 0.1)',
         'warning-light': 'rgba(255, 153, 0, 0.1)',
         'accent-light': 'rgba(201, 201, 247, 0.1)',
+        'gray': '#F8F9FA',
+        'gray-light': '#F5F5F5'
       },
       textColor: {
         'muted': 'rgba(30, 30, 30, 0.6)',
@@ -52,8 +54,5 @@ module.exports = {
       },
     },
   },
-  plugins: [
-    require("tailwind-scrollbar-hide"),
-    require("@tailwindcss/typography"),
-  ],
+  plugins: [],
 };

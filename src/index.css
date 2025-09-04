@@ -50,27 +50,7 @@
 .animate-glow {
   animation: glow 8s ease-in-out infinite;
 }
+
 .animate-glow2 {
   animation: glow2 10s ease-in-out infinite;
-}
-
-/* Table styling for markdown tables */
-.prose table {
-  @apply w-full border-collapse border border-gray-300 my-4;
-}
-
-.prose th {
-  @apply bg-gray-100 border border-gray-300 px-4 py-2 text-left font-semibold;
-}
-
-.prose td {
-  @apply border border-gray-300 px-4 py-2;
-}
-
-.prose tbody tr:nth-child(even) {
-  @apply bg-gray-50;
-}
-
-.prose tbody tr:hover {
-  @apply bg-blue-50;
 }
