@@ -1,4 +1,4 @@
-import React from 'react';
+// Removed unused React import
 import Header from './components/Header';
 import ChatInterface from './components/ChatInterface';
 
