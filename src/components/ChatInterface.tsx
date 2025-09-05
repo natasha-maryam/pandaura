@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
-import {  ArrowUp, Loader2, Code, Brain, X, AlertCircle, Image, FileText, Settings } from 'lucide-react';
+import {  ArrowUp, Loader2, Code, Brain, X, AlertCircle, Image, FileText, Settings, Copy, Check } from 'lucide-react';
 import logo from "../assets/logo.png"
 
 type WrapperType = 'A' | 'B';
@@ -9,6 +9,11 @@ interface Message {
   content: string;
   isUser: boolean;
   timestamp: Date;
+  code?: string;
+  featureDetected?: string;
+  summary?: string;
+  nextStep?: string;
+  fileName?: string;
 }
 
 export default function ChatInterface() {
@@ -19,6 +24,7 @@ export default function ChatInterface() {
   const [showWrapperInfo, setShowWrapperInfo] = useState(false);
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   const [uploadingFiles, setUploadingFiles] = useState(false);
+  const [copiedMessageId, setCopiedMessageId] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   // Scroll to bottom when messages change
@@ -28,6 +34,17 @@ export default function ChatInterface() {
 
   const generateMessageId = () => {
     return `msg_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+  };
+
+  // Copy code to clipboard
+  const copyToClipboard = async (text: string, messageId: string) => {
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopiedMessageId(messageId);
+      setTimeout(() => setCopiedMessageId(null), 2000);
+    } catch (err) {
+      console.error('Failed to copy: ', err);
+    }
   };
 
   const sendMessage = async () => {
@@ -54,17 +71,151 @@ export default function ChatInterface() {
       }, 1000);
     }
 
-    // Simulate AI response (in a real app, this would call an API)
-    setTimeout(() => {
+    // Integrate backend API using WebSocket
+    try {
+      const ws = new WebSocket('ws://af13f070e8b0.ngrok-free.app/ws/chat');
+      let messageReceived = false;
+      
+      ws.onopen = () => {
+        console.log('WebSocket connected');
+        // Ensure the message content is not empty
+        const messageContent = userMessage.content.trim();
+        if (!messageContent) {
+          console.error('Message content is empty');
+          setIsLoading(false);
+          return;
+        }
+        
+        const payload = { message: messageContent };
+        console.log('Sending payload:', payload);
+        ws.send(JSON.stringify(payload));
+      };
+      
+      ws.onmessage = (event) => {
+        console.log('WebSocket message received:', event.data);
+        messageReceived = true;
+        
+        try {
+          const data = JSON.parse(event.data);
+          
+          // Check if the message indicates an error
+          if (data.type === 'error') {
+            const aiMessage: Message = {
+              id: generateMessageId(),
+              content: `Error from server: ${data.content || 'Unknown error'}`,
+              isUser: false,
+              timestamp: new Date()
+            };
+            setMessages(prev => [...prev, aiMessage]);
+            setIsLoading(false);
+            ws.close();
+            return;
+          }
+          
+          // Handle new response format
+          if (data.type === 'response' && data.content) {
+            const responseContent = data.content;
+            const aiMessage: Message = {
+              id: generateMessageId(),
+              content: responseContent.summary || 'No summary provided',
+              isUser: false,
+              timestamp: new Date(),
+              code: responseContent.code || undefined,
+              featureDetected: responseContent.feature_detected || undefined,
+              summary: responseContent.summary || undefined,
+              nextStep: responseContent.next_step || undefined,
+              fileName: responseContent.file_name || undefined
+            };
+            setMessages(prev => [...prev, aiMessage]);
+          } else {
+            // Fallback for old format
+            const aiMessage: Message = {
+              id: generateMessageId(),
+              content: data?.code || data?.result || data?.message || JSON.stringify(data),
+              isUser: false,
+              timestamp: new Date()
+            };
+            setMessages(prev => [...prev, aiMessage]);
+          }
+          
+          setIsLoading(false);
+          ws.close();
+        } catch (parseError) {
+          console.error('Error parsing WebSocket message:', parseError);
+          const aiMessage: Message = {
+            id: generateMessageId(),
+            content: 'Error: Failed to parse response from server',
+            isUser: false,
+            timestamp: new Date()
+          };
+          setMessages(prev => [...prev, aiMessage]);
+          setIsLoading(false);
+          ws.close();
+        }
+      };
+      
+      ws.onerror = (error) => {
+        console.error('WebSocket error:', error);
+        const aiMessage: Message = {
+          id: generateMessageId(),
+          content: 'Error: WebSocket connection failed',
+          isUser: false,
+          timestamp: new Date()
+        };
+        setMessages(prev => [...prev, aiMessage]);
+        setIsLoading(false);
+      };
+
+      ws.onclose = (event) => {
+        console.log('WebSocket closed:', event.code, event.reason);
+        
+        // Only show error if we didn't receive a message and it's not a normal closure
+        if (!messageReceived && event.code !== 1000) {
+          const aiMessage: Message = {
+            id: generateMessageId(),
+            content: `Error: Connection closed unexpectedly (Code: ${event.code}). ${event.reason || 'No reason provided'}`,
+            isUser: false,
+            timestamp: new Date()
+          };
+          setMessages(prev => [...prev, aiMessage]);
+        }
+        setIsLoading(false);
+      };
+
+      // Set a timeout for the connection
+      setTimeout(() => {
+        if (ws.readyState === WebSocket.CONNECTING || (ws.readyState === WebSocket.OPEN && !messageReceived)) {
+          ws.close();
+          const aiMessage: Message = {
+            id: generateMessageId(),
+            content: 'Error: Connection timeout - no response received within 30 seconds',
+            isUser: false,
+            timestamp: new Date()
+          };
+          setMessages(prev => [...prev, aiMessage]);
+          setIsLoading(false);
+        }
+      }, 30000); // 30 second timeout
+
+    } catch (error) {
+      let errorMsg = 'Failed to fetch response';
+      if (error && typeof error === 'object') {
+        const err = error as any;
+        if ('message' in err) {
+          errorMsg = err.message;
+        } else if (err.response && err.response.data) {
+          errorMsg = JSON.stringify(err.response.data);
+        }
+      }
       const aiMessage: Message = {
         id: generateMessageId(),
-        content: `I received your message: "${userMessage.content}". This is a demo response. In the full application, this would connect to the Pandaura AI service.`,
+        content: 'Error: ' + errorMsg,
         isUser: false,
         timestamp: new Date()
       };
       setMessages(prev => [...prev, aiMessage]);
-      setIsLoading(false);
-    }, 1500);
+    }
+    setIsLoading(false);
   };
 
   // Handle files selected
@@ -175,20 +326,51 @@ export default function ChatInterface() {
                 }`}
               >
                 <div
-                  className={`max-w-3xl p-4 rounded-lg ${
+                  className={`p-4 rounded-lg ${
                     message.isUser
-                      ? "bg-black text-white"
-                      : "bg-gray-100 text-gray-900"
+                      ? "bg-black text-white max-w-[35%] w-fit"
+                      : "bg-gray-100 text-gray-900 w-4/5"
                   }`}
                 >
+                  {/* Display summary/explanation */}
                   <div className="whitespace-pre-wrap">{message.content}</div>
-                  <div
-                    className={`text-xs mt-2 ${
-                      message.isUser ? "text-gray-300" : "text-gray-500"
-                    }`}
-                  >
-                    {message.timestamp.toLocaleTimeString()}
-                  </div>
+                  
+                  {/* Display code block if feature_detected is 'code' and code exists */}
+                  {message.featureDetected === 'code' && message.code && (
+                    <div className="mt-3">
+                      <div className="relative bg-gray-50 border border-gray-300 rounded-lg p-4">
+                        <button
+                          onClick={() => copyToClipboard(message.code || '', message.id)}
+                          className="absolute top-3 right-3 flex items-center gap-1 px-2 py-1 bg-gray-200 hover:bg-gray-300 rounded text-xs transition-colors text-gray-700"
+                          title="Copy code"
+                        >
+                          {copiedMessageId === message.id ? (
+                            <>
+                              <Check className="w-3 h-3" />
+                              Copied
+                            </>
+                          ) : (
+                            <>
+                              <Copy className="w-3 h-3" />
+                              Copy
+                            </>
+                          )}
+                        </button>
+                        <div className="overflow-x-auto pr-16">
+                          <pre className="whitespace-pre-wrap text-sm text-gray-800 font-mono">
+                            <code>{message.code}</code>
+                          </pre>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                  
+                  {/* Display next step if available and feature is code */}
+                  {message.nextStep && message.featureDetected === 'code' && (
+                    <div className="mt-3 text-sm text-gray-700">
+                      {message.nextStep}?
+                    </div>
+                  )}
                 </div>
               </div>
             ))}
