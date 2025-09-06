@@ -20,6 +20,7 @@ export default function ChatInterface() {
   const [chatMessage, setChatMessage] = useState('');
   const [messages, setMessages] = useState<Message[]>([]);
   const [isLoading, setIsLoading] = useState(false);
+  const [isAssistantTyping, setIsAssistantTyping] = useState(false);
   const [selectedWrapper, setSelectedWrapper] = useState<WrapperType>('A');
   const [showWrapperInfo, setShowWrapperInfo] = useState(false);
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
@@ -27,10 +28,15 @@ export default function ChatInterface() {
   const [copiedMessageId, setCopiedMessageId] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
-  // Scroll to bottom when messages change
+  // Scroll to bottom when messages change or typing indicator appears
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages]);
+  }, [messages, isAssistantTyping]);
+
+  // Debug typing state
+  useEffect(() => {
+    console.log('isAssistantTyping changed to:', isAssistantTyping);
+  }, [isAssistantTyping]);
 
   const generateMessageId = () => {
     return `msg_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
@@ -47,8 +53,20 @@ export default function ChatInterface() {
     }
   };
 
+  // Helper function to stop typing indicator with minimum duration
+  const stopTypingIndicator = (startTime: number) => {
+    const typingDuration = Date.now() - startTime;
+    const minTypingDuration = 1000; // 1 second
+    const remainingTime = Math.max(0, minTypingDuration - typingDuration);
+    
+    setTimeout(() => {
+      setIsAssistantTyping(false);
+      console.log('Set isAssistantTyping to false');
+    }, remainingTime);
+  };
+
   const sendMessage = async () => {
-    if ((!chatMessage.trim() && selectedFiles.length === 0) || isLoading) return;
+    if ((!chatMessage.trim() && selectedFiles.length === 0) || isLoading || isAssistantTyping) return;
 
     const userMessage: Message = {
       id: generateMessageId(),
@@ -60,6 +78,12 @@ export default function ChatInterface() {
     setMessages(prev => [...prev, userMessage]);
     setChatMessage('');
     setIsLoading(true);
+    
+    // Set typing indicator with a small delay to ensure it's visible
+    setTimeout(() => {
+      setIsAssistantTyping(true);
+      console.log('Set isAssistantTyping to true');
+    }, 100);
 
     // Simulate file upload if files are selected
     if (selectedFiles.length > 0) {
@@ -73,8 +97,9 @@ export default function ChatInterface() {
 
     // Integrate backend API using WebSocket
     try {
-      const ws = new WebSocket('ws://af13f070e8b0.ngrok-free.app/ws/chat');
+      const ws = new WebSocket('wss://42ba7d41ad2d.ngrok-free.app/ws/chat');
       let messageReceived = false;
+      const typingStartTime = Date.now();
       
       ws.onopen = () => {
         console.log('WebSocket connected');
@@ -83,6 +108,7 @@ export default function ChatInterface() {
         if (!messageContent) {
           console.error('Message content is empty');
           setIsLoading(false);
+          setIsAssistantTyping(false);
           return;
         }
         
@@ -94,6 +120,9 @@ export default function ChatInterface() {
       ws.onmessage = (event) => {
         console.log('WebSocket message received:', event.data);
         messageReceived = true;
+        
+        // Stop typing indicator with minimum duration
+        stopTypingIndicator(typingStartTime);
         
         try {
           const data = JSON.parse(event.data);
@@ -150,12 +179,14 @@ export default function ChatInterface() {
           };
           setMessages(prev => [...prev, aiMessage]);
           setIsLoading(false);
+          stopTypingIndicator(typingStartTime);
           ws.close();
         }
       };
       
       ws.onerror = (error) => {
         console.error('WebSocket error:', error);
+        stopTypingIndicator(typingStartTime);
         const aiMessage: Message = {
           id: generateMessageId(),
           content: 'Error: WebSocket connection failed',
@@ -168,6 +199,7 @@ export default function ChatInterface() {
 
       ws.onclose = (event) => {
         console.log('WebSocket closed:', event.code, event.reason);
+        stopTypingIndicator(typingStartTime);
         
         // Only show error if we didn't receive a message and it's not a normal closure
         if (!messageReceived && event.code !== 1000) {
@@ -186,6 +218,7 @@ export default function ChatInterface() {
       setTimeout(() => {
         if (ws.readyState === WebSocket.CONNECTING || (ws.readyState === WebSocket.OPEN && !messageReceived)) {
           ws.close();
+          stopTypingIndicator(typingStartTime);
           const aiMessage: Message = {
             id: generateMessageId(),
             content: 'Error: Connection timeout - no response received within 30 seconds',
@@ -214,8 +247,9 @@ export default function ChatInterface() {
         timestamp: new Date()
       };
       setMessages(prev => [...prev, aiMessage]);
+      setIsLoading(false);
+      setIsAssistantTyping(false);
     }
-    setIsLoading(false);
   };
 
   // Handle files selected
@@ -264,7 +298,7 @@ export default function ChatInterface() {
   return (
     <div className="flex flex-col h-full">
       {/* Messages Area */}
-      <div className="flex-1 overflow-y-auto p-6 space-y-4">
+      <div className="flex-1 overflow-y-auto p-6 space-y-4 min-h-0">
         {messages.length === 0 ? (
           // Welcome Screen
           <div className="text-muted mt-4 px-6 flex flex-col items-center text-center mx-auto">
@@ -374,12 +408,16 @@ export default function ChatInterface() {
                 </div>
               </div>
             ))}
-            {isLoading && (
+            {isAssistantTyping && (
               <div className="flex justify-start">
                 <div className="max-w-3xl p-4 rounded-lg bg-gray-100 text-gray-900">
-                  <div className="flex items-center space-x-2">
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                    <span>Thinking...</span>
+                  <div className="flex items-center space-x-3">
+                    <div className="flex space-x-1">
+                      <div className="w-3 h-3 bg-black rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></div>
+                      <div className="w-3 h-3 bg-black rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></div>
+                      <div className="w-3 h-3 bg-black rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></div>
+                    </div>
+              
                   </div>
                 </div>
               </div>
@@ -576,6 +614,7 @@ export default function ChatInterface() {
               disabled={
                 selectedWrapper === "A" ||
                 isLoading ||
+                isAssistantTyping ||
                 uploadingFiles
               }
             />
@@ -602,6 +641,7 @@ export default function ChatInterface() {
               disabled={
                 selectedWrapper === "A" ||
                 isLoading ||
+                isAssistantTyping ||
                 uploadingFiles
               }
             >
@@ -651,10 +691,11 @@ export default function ChatInterface() {
                 disabled={
                   (!chatMessage.trim() && selectedFiles.length === 0) ||
                   isLoading ||
+                  isAssistantTyping ||
                   uploadingFiles
                 }
               >
-                {isLoading || uploadingFiles ? (
+                {isLoading || isAssistantTyping || uploadingFiles ? (
                   <Loader2 className="w-4 h-4 animate-spin" />
                 ) : (
                   <ArrowUp className="w-6 h-6" />

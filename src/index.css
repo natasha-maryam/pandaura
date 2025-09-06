@@ -54,3 +54,17 @@
 .animate-glow2 {
   animation: glow2 10s ease-in-out infinite;
 }
+
+/* Typing indicator animation */
+@keyframes typing-bounce {
+  0%, 60%, 100% {
+    transform: translateY(0);
+  }
+  30% {
+    transform: translateY(-10px);
+  }
+}
+
+.animate-typing-bounce {
+  animation: typing-bounce 1.4s infinite ease-in-out;
+}
