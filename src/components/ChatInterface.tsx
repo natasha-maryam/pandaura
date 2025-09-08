@@ -1,8 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
-import {  ArrowUp, Loader2, Code, Brain, X, AlertCircle, Image, FileText, Settings, Copy, Check } from 'lucide-react';
+import {  ArrowUp, Loader2, X, Image, FileText, Settings, Copy, Check } from 'lucide-react';
 import logo from "../assets/logo.png"
-
-type WrapperType = 'A' | 'B';
 
 interface Message {
   id: string;
@@ -21,8 +19,6 @@ export default function ChatInterface() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [isAssistantTyping, setIsAssistantTyping] = useState(false);
-  const [selectedWrapper, setSelectedWrapper] = useState<WrapperType>('A');
-  const [showWrapperInfo, setShowWrapperInfo] = useState(false);
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   const [uploadingFiles, setUploadingFiles] = useState(false);
   const [copiedMessageId, setCopiedMessageId] = useState<string | null>(null);
@@ -263,7 +259,7 @@ export default function ChatInterface() {
   };
 
   // Simple file type checking function
-  const isFileSupported = (file: File, wrapper: WrapperType) => {
+  const isFileSupported = (file: File) => {
     const imageTypes = ['image/png', 'image/jpeg', 'image/jpg', 'image/gif'];
     const documentTypes = [
       'application/pdf',
@@ -275,18 +271,13 @@ export default function ChatInterface() {
       'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
     ];
     
-    if (wrapper === 'A') {
-      return [...imageTypes, ...documentTypes].includes(file.type);
-    } else {
-      // Document Analyst mode supports more file types
-      const plcTypes = ['.xml', '.l5x', '.st', '.zip'];
-      const hasPlcExtension = plcTypes.some(ext => file.name.toLowerCase().endsWith(ext));
-      return [...imageTypes, ...documentTypes].includes(file.type) || hasPlcExtension;
-    }
+    const plcTypes = ['.xml', '.l5x', '.st', '.zip'];
+    const hasPlcExtension = plcTypes.some(ext => file.name.toLowerCase().endsWith(ext));
+    return [...imageTypes, ...documentTypes].includes(file.type) || hasPlcExtension;
   };
 
   // Get file type category for display
-  const getFileTypeCategory = (file: File, _wrapper: WrapperType) => {
+  const getFileTypeCategory = (file: File) => {
     const imageTypes = ['image/png', 'image/jpeg', 'image/jpg', 'image/gif'];
     const plcTypes = ['.xml', '.l5x', '.st', '.zip'];
     
@@ -321,26 +312,16 @@ export default function ChatInterface() {
             {/* Sample questions */}
             <div className="mt-6 grid grid-cols-1 md:grid-cols-2 gap-3 w-full max-w-7xl">
               <p className="col-span-full text-xs font-medium text-gray-600 mb-2 text-left">
-                Try asking{" "}
-                {selectedWrapper === "A"
-                  ? "(Code Generator)"
-                  : "(Document Analyst)"}
-                :
+                Try asking:
               </p>
-              {(selectedWrapper === "A"
-                ? [
-                    "Create a motor starter logic with safety interlocks",
-                    "Generate tag database for a conveyor system",
-                  ]
-                : [
-                    "Upload and analyze my PLC project files",
-                    "Extract tag information from this documentation",
-                    "Review this safety program for compliance",
-                    "Summarize the I/O configuration from these files",
-                  ]
-              ).map((question, index) => (
+              {[
+                "Upload and analyze my PLC project files",
+                "Extract tag information from this documentation",
+                "Review this safety program for compliance",
+                "Summarize the I/O configuration from these files",
+              ].map((question, index) => (
                 <button
-                  key={`${selectedWrapper}-${index}`}
+                  key={index}
                   onClick={() => setChatMessage(question)}
                   className="text-left p-3 text-sm text-gray-700 bg-gray-50 hover:bg-gray-100 rounded border transition-colors"
                 >
@@ -427,148 +408,33 @@ export default function ChatInterface() {
         )}
       </div>
 
-      {/* AI Mode Selector */}
-      <div className="border-t bg-white p-3">
-        <div className="max-w-[94%] mx-auto">
-          <div className="flex items-center gap-4">
-            <div className="flex items-center gap-2">
-              <label className="text-sm font-medium text-gray-700">
-                AI Mode:
-              </label>
-              <div className="flex rounded-md border border-gray-300 overflow-hidden">
-                <button
-                  onClick={() => {
-                    setSelectedWrapper("A");
-                    // Clear selected files when switching to Code Generator
-                    if (selectedFiles.length > 0) {
-                      setSelectedFiles([]);
-                    }
-                  }}
-                  className={`px-3 py-1 text-sm font-medium transition-colors ${
-                    selectedWrapper === "A"
-                      ? "bg-black text-white"
-                      : "bg-white text-gray-700 hover:bg-gray-50"
-                  }`}
-                >
-                  <div className="flex items-center gap-1">
-                    <Code className="w-3 h-3" />
-                    Code Generator
-                  </div>
-                </button>
-                <button
-                  onClick={() => setSelectedWrapper("B")}
-                  className={`px-3 py-1 text-sm font-medium transition-colors ${
-                    selectedWrapper === "B"
-                      ? "bg-black text-white"
-                      : "bg-white text-gray-700 hover:bg-gray-50"
-                  }`}
-                >
-                  <div className="flex items-center gap-1">
-                    <Brain className="w-3 h-3" />
-                    Doc Analyst
-                  </div>
-                </button>
-              </div>
-            </div>
-
-            <button
-              onClick={() => setShowWrapperInfo(!showWrapperInfo)}
-              className="text-xs text-gray-500 hover:text-gray-700 transition-colors"
-            >
-              ℹ️ What's the difference?
-            </button>
-          </div>
-
-          {/* Wrapper Info Panel */}
-          {showWrapperInfo && (
-            <div className="mt-3 p-3 bg-gray-50 border border-gray-200 rounded-md text-xs">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <h4 className="font-semibold text-blue-600 mb-1 flex items-center gap-1">
-                    <Code className="w-3 h-3" />
-                    Code Generator (A)
-                  </h4>
-                  <p className="text-gray-600 mb-2">
-                    Generates PLC code, logic, and automation solutions. Best
-                    for:
-                  </p>
-                  <ul className="text-gray-600 space-y-1">
-                    <li>• Creating new PLC programs</li>
-                    <li>• Logic design and optimization</li>
-                    <li>• Tag databases and HMI screens</li>
-                    <li>• Code review and debugging</li>
-                  </ul>
-                </div>
-                <div>
-                  <h4 className="font-semibold text-green-600 mb-1 flex items-center gap-1">
-                    <Brain className="w-3 h-3" />
-                    Document Analyst (B)
-                  </h4>
-                  <p className="text-gray-600 mb-2">
-                    Analyzes PLC projects, documentation, and technical files.
-                    Best for:
-                  </p>
-                  <ul className="text-gray-600 space-y-1">
-                    <li>• Analyzing existing PLC projects (.xml, .l5x, .st)</li>
-                    <li>• Extracting information from technical docs</li>
-                    <li>• Safety system analysis</li>
-                    <li>• Compliance reviews</li>
-                  </ul>
-                </div>
-              </div>
-            </div>
-          )}
-        </div>
-      </div>
-
       {/* Input Area */}
-      <div className="border-t bg-white p-6">
+      <div className=" bg-white p-6">
         {/* Selected Files Indicator */}
         {selectedFiles.length > 0 && (
           <div className="mb-3 max-w-[94%] mx-auto">
-            <div
-              className={`flex items-center gap-2 rounded-md px-3 py-2 ${
-                selectedWrapper === "A"
-                  ? "bg-amber-50 border border-amber-200"
-                  : "bg-blue-50 border border-blue-200"
-              }`}
-            >
+            <div className="flex items-center gap-2 rounded-md px-3 py-2 bg-blue-50 border border-blue-200">
               <div className="flex items-center gap-2 flex-1">
-                {selectedWrapper === "A" ? (
-                  <>
-                    <AlertCircle className="w-4 h-4 text-amber-600" />
-                    <span className="text-sm text-amber-700 font-medium">
-                      Files not supported in Code Generator mode
-                    </span>
-                  </>
-                ) : (
-                  <>
-                    {selectedFiles.some(
-                      (f) => getFileTypeCategory(f, selectedWrapper) === "image"
-                    ) && <Image className="w-4 h-4 text-blue-600" />}
-                    {selectedFiles.some(
-                      (f) => getFileTypeCategory(f, selectedWrapper) === "document"
-                    ) && <FileText className="w-4 h-4 text-blue-600" />}
-                    {selectedFiles.some(
-                      (f) => getFileTypeCategory(f, selectedWrapper) === "plc"
-                    ) && <Settings className="w-4 h-4 text-green-600" />}
-                    <span className="text-sm text-blue-700 font-medium">
-                      {selectedFiles.length} file
-                      {selectedFiles.length > 1 ? "s" : ""} selected
-                    </span>
-                    <div className="text-xs text-blue-600 max-w-md truncate">
-                      ({selectedFiles.map((f) => f.name).join(", ")})
-                    </div>
-                  </>
-                )}
+                {selectedFiles.some(
+                  (f) => getFileTypeCategory(f) === "image"
+                ) && <Image className="w-4 h-4 text-blue-600" />}
+                {selectedFiles.some(
+                  (f) => getFileTypeCategory(f) === "document"
+                ) && <FileText className="w-4 h-4 text-blue-600" />}
+                {selectedFiles.some(
+                  (f) => getFileTypeCategory(f) === "plc"
+                ) && <Settings className="w-4 h-4 text-green-600" />}
+                <span className="text-sm text-blue-700 font-medium">
+                  {selectedFiles.length} file
+                  {selectedFiles.length > 1 ? "s" : ""} selected
+                </span>
+                <div className="text-xs text-blue-600 max-w-md truncate">
+                  ({selectedFiles.map((f) => f.name).join(", ")})
+                </div>
               </div>
               <button
                 onClick={clearSelectedFiles}
-                className={`hover:opacity-80 flex items-center gap-1 text-xs ${
-                  selectedWrapper === "A"
-                    ? "text-amber-600 hover:text-amber-800"
-                    : "text-blue-600 hover:text-blue-800"
-                }`}
+                className="hover:opacity-80 flex items-center gap-1 text-xs text-blue-600 hover:text-blue-800"
                 title="Clear all files"
               >
                 <X className="w-3 h-3" />
@@ -589,15 +455,12 @@ export default function ChatInterface() {
               onChange={(e) => {
                 const files = Array.from(e.target.files || []);
                 if (files.length > 0) {
-                  // Validate file types based on selected wrapper
+                  // Validate file types
                   const validFiles = files.filter((file) =>
-                    isFileSupported(file, selectedWrapper)
+                    isFileSupported(file)
                   );
                   if (validFiles.length !== files.length) {
-                    const supportedTypes =
-                      selectedWrapper === "A"
-                        ? "images (PNG, JPG, GIF) or documents (PDF, DOC, TXT, CSV, XLS, PPT)"
-                        : "PLC files (.xml, .l5x, .st, .zip), documents (PDF, DOC, TXT, CSV), or images";
+                    const supportedTypes = "PLC files (.xml, .l5x, .st, .zip), documents (PDF, DOC, TXT, CSV), or images";
                     alert(
                       `Some files are not supported. Please use ${supportedTypes}.`
                     );
@@ -612,7 +475,6 @@ export default function ChatInterface() {
               className="hidden"
               id="file-upload"
               disabled={
-                selectedWrapper === "A" ||
                 isLoading ||
                 isAssistantTyping ||
                 uploadingFiles
@@ -621,25 +483,14 @@ export default function ChatInterface() {
 
             {/* Plus button inside textarea on the left */}
             <button
-              onClick={() =>
-                selectedWrapper === "B"
-                  ? document.getElementById("file-upload")?.click()
-                  : null
-              }
+              onClick={() => document.getElementById("file-upload")?.click()}
               className={`absolute left-3 bottom-3 z-10 w-8 h-8 rounded-full flex items-center justify-center transition-all duration-200 ${
-                selectedWrapper === "A"
-                  ? "bg-gray-100 text-gray-400 cursor-not-allowed"
-                  : selectedFiles.length > 0
+                selectedFiles.length > 0
                   ? "bg-blue-500 text-white hover:bg-blue-600"
                   : "bg-gray-100 text-gray-600 hover:bg-gray-200"
               }`}
-              title={
-                selectedWrapper === "A"
-                  ? "File upload is disabled for Code Generator mode"
-                  : "Upload PLC files, documents, or images"
-              }
+              title="Upload PLC files, documents, or images"
               disabled={
-                selectedWrapper === "A" ||
                 isLoading ||
                 isAssistantTyping ||
                 uploadingFiles
@@ -665,13 +516,9 @@ export default function ChatInterface() {
                 }
               }}
               placeholder={
-                selectedWrapper === "A"
-                  ? selectedFiles.length > 0
-                    ? "Files are not supported in Code Generator mode. Switch to Document Analyst or clear files."
-                    : "Ask about PLCs, SCADA, HMI, robotics, motor control, or request code generation..."
-                  : selectedFiles.length > 0
+                selectedFiles.length > 0
                   ? "Ask about the uploaded files or add additional instructions..."
-                  : "Upload PLC files, documents, or images for analysis..."
+                  : "Ask anything"
               }
               className="w-full bg-transparent rounded-full pl-14 pr-14 py-3 shadow-md text-sm text-gray-900 placeholder-gray-500 resize-none outline-none border border-gray-300 focus-within:ring-2 focus-within:ring-accent focus-within:border-transparent transition-all duration-200 min-h-[48px] max-h-[120px]"
               rows={1}
